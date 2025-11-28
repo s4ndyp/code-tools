@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="nl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevTools Suite</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Diff2Html & Diff Dependencies -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.7.1/styles/github.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/diff2html/bundles/css/diff2html.min.css" />
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/diff/dist/diff.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/diff2html/bundles/js/diff2html-ui.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#1e293b', // Iets lichter dan 900 voor kaarten
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Algemene Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 5px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569; 
+        }
+        
+        /* Diff2Html Dark Mode Overrides zodat het matcht met de app */
+        .d2h-wrapper {
+            background-color: #0f172a; 
+            border: none;
+        }
+        .d2h-file-header {
+            background-color: #1e293b !important;
+            border-bottom: 1px solid #334155 !important;
+            color: #e2e8f0 !important;
+        }
+        .d2h-file-wrapper {
+            border: 1px solid #334155 !important;
+            margin-bottom: 1em;
+            background-color: #0f172a;
+        }
+        .d2h-code-line-ctn {
+            color: #cbd5e1;
+        }
+        .d2h-info {
+            background-color: #1e293b !important; 
+            color: #94a3b8 !important;
+            border-color: #334155 !important;
+        }
+        
+        .code-font {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+        }
+
+        /* Animaties voor schermwissels */
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans h-screen flex flex-col overflow-hidden">
+
+    <!-- ========================================== -->
+    <!-- HOOFDMENU (DASHBOARD)                      -->
+    <!-- ========================================== -->
+    <div id="view-dashboard" class="flex-1 flex flex-col items-center justify-center p-6 fade-in overflow-y-auto">
+        <div class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-bold mb-4 tracking-tight">DevTools <span class="text-blue-500">Suite</span></h1>
+            <p class="text-slate-400 text-lg">Selecteer een tool om te beginnen</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl w-full">
+            
+            <!-- Card: HTML Tester -->
+            <button onclick="switchView('tester')" class="group relative bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-blue-500 rounded-2xl p-8 text-left transition-all duration-300 shadow-lg hover:shadow-blue-900/20 transform hover:-translate-y-1">
+                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-32 w-32" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                </div>
+                <div class="h-12 w-12 bg-blue-500/20 rounded-xl flex items-center justify-center mb-6 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <h2 class="text-2xl font-bold mb-2 group-hover:text-blue-400 transition-colors">HTML Playground</h2>
+                <p class="text-slate-400 leading-relaxed">Schrijf, plak of upload HTML code en bekijk direct het resultaat in een veilige omgeving. Inclusief geschiedenis.</p>
+            </button>
+
+            <!-- Card: Code Vergelijker -->
+            <button onclick="switchView('diff')" class="group relative bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-purple-500 rounded-2xl p-8 text-left transition-all duration-300 shadow-lg hover:shadow-purple-900/20 transform hover:-translate-y-1">
+                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-32 w-32" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                </div>
+                <div class="h-12 w-12 bg-purple-500/20 rounded-xl flex items-center justify-center mb-6 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                    </svg>
+                </div>
+                <h2 class="text-2xl font-bold mb-2 group-hover:text-purple-400 transition-colors">Code Vergelijker</h2>
+                <p class="text-slate-400 leading-relaxed">Vergelijk twee versies van tekst of code (Diff Tool). Zie in één oogopslag wat er is toegevoegd of verwijderd.</p>
+            </button>
+
+        </div>
+        <p class="mt-12 text-slate-600 text-sm">Versie 2.0 - Geïntegreerde Tools</p>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TOOL 1: HTML TESTER                        -->
+    <!-- ========================================== -->
+    <div id="view-tester" class="hidden flex flex-col h-full bg-slate-900">
+        <!-- Header -->
+        <header class="h-14 bg-slate-800 border-b border-slate-700 flex items-center justify-between px-4 shadow-md z-20">
+            <div class="flex items-center gap-4">
+                <button onclick="switchView('dashboard')" class="text-slate-400 hover:text-white flex items-center gap-1 text-sm font-medium transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    Home
+                </button>
+                <div class="h-6 w-px bg-slate-600 mx-2"></div>
+                <h1 class="text-lg font-bold tracking-wide">HTML <span class="text-blue-500">Playground</span></h1>
+            </div>
+
+            <div id="tester-nav-actions">
+                <button id="btn-tester-back" onclick="toggleTesterMode('editor')" class="hidden flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white text-sm px-3 py-1.5 rounded transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+                    </svg>
+                    Terug naar Editor
+                </button>
+            </div>
+        </header>
+
+        <main class="flex flex-1 relative overflow-hidden">
+            <!-- EDITOR CONTAINER -->
+            <div id="tester-editor-container" class="flex w-full h-full">
+                <!-- Input Area -->
+                <div class="flex-1 flex flex-col p-4 gap-4 h-full relative">
+                    <div class="flex justify-between items-center bg-slate-800 p-2 rounded border border-slate-700">
+                        <div class="flex gap-2">
+                            <label for="file-upload-tester" class="cursor-pointer bg-slate-700 hover:bg-slate-600 text-xs sm:text-sm px-3 py-2 rounded flex items-center gap-2 transition text-slate-300 hover:text-white">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                </svg>
+                                Upload
+                            </label>
+                            <input id="file-upload-tester" type="file" accept=".html,.htm,.txt" class="hidden" onchange="handleTesterUpload(this)">
+                            
+                            <button onclick="clearTesterEditor()" class="text-slate-400 hover:text-red-400 text-xs sm:text-sm px-3 py-2 transition">Wissen</button>
+                        </div>
+                        
+                        <button onclick="runTesterCode()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-1.5 rounded font-bold shadow-lg shadow-blue-900/50 flex items-center gap-2 transition transform hover:scale-105 text-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            RUN
+                        </button>
+                    </div>
+
+                    <textarea id="tester-code-input" class="flex-1 w-full bg-slate-800 text-slate-200 code-font text-sm p-4 rounded border border-slate-700 focus:outline-none focus:border-blue-500 resize-none shadow-inner" placeholder="<html>
+  <body>
+    <h1>Hallo Wereld!</h1>
+  </body>
+</html>"></textarea>
+                </div>
+
+                <!-- History Sidebar -->
+                <div class="w-72 bg-slate-800 border-l border-slate-700 flex flex-col hidden md:flex">
+                    <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+                        <h2 class="font-bold text-slate-300 text-sm flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Geschiedenis
+                        </h2>
+                        <button onclick="clearHistory()" class="text-xs text-slate-500 hover:text-red-400">Wis</button>
+                    </div>
+                    <div id="history-list" class="flex-1 overflow-y-auto p-2 space-y-2">
+                        <!-- History items via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- PREVIEW CONTAINER -->
+            <div id="tester-preview-container" class="hidden w-full h-full bg-white">
+                <iframe id="tester-preview-frame" class="w-full h-full border-none"></iframe>
+            </div>
+        </main>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TOOL 2: CODE VERGELIJKER (DIFF TOOL)       -->
+    <!-- ========================================== -->
+    <div id="view-diff" class="hidden flex flex-col h-full bg-slate-900 overflow-y-auto">
+        <!-- Header -->
+        <header class="h-14 bg-slate-800 border-b border-slate-700 flex items-center justify-between px-4 sticky top-0 z-50 shadow-md">
+            <div class="flex items-center gap-4">
+                <button onclick="switchView('dashboard')" class="text-slate-400 hover:text-white flex items-center gap-1 text-sm font-medium transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    Home
+                </button>
+                <div class="h-6 w-px bg-slate-600 mx-2"></div>
+                <h1 class="text-lg font-bold tracking-wide">Code <span class="text-purple-500">Vergelijker</span></h1>
+            </div>
+
+            <div class="flex items-center gap-2 text-xs sm:text-sm">
+                <button onclick="setDiffMode('side-by-side')" id="btn-diff-side" class="px-3 py-1.5 rounded transition-colors bg-purple-600 text-white">Naast elkaar</button>
+                <button onclick="setDiffMode('line-by-line')" id="btn-diff-line" class="px-3 py-1.5 rounded transition-colors text-slate-400 hover:bg-slate-700">Gecombineerd</button>
+            </div>
+        </header>
+
+        <main class="flex-grow p-4 md:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6">
+            
+            <!-- Inputs -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 h-[400px]">
+                <!-- Oud -->
+                <div class="flex flex-col gap-2 h-full">
+                    <div class="flex justify-between items-center px-1">
+                        <label class="font-semibold text-red-400 text-sm flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-red-500"></span> Origineel
+                        </label>
+                        <div class="relative">
+                            <input type="file" id="diff-file1" class="hidden" onchange="handleDiffUpload(this, 'diff-input-old')">
+                            <label for="diff-file1" class="cursor-pointer text-xs bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition">📂 Upload</label>
+                        </div>
+                    </div>
+                    <textarea id="diff-input-old" class="flex-grow w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-300 code-font text-xs focus:outline-none focus:border-purple-500 resize-none" placeholder="Plak hier het originele bestand..."></textarea>
+                </div>
+
+                <!-- Nieuw -->
+                <div class="flex flex-col gap-2 h-full">
+                    <div class="flex justify-between items-center px-1">
+                        <label class="font-semibold text-green-400 text-sm flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-green-500"></span> Aangepast
+                        </label>
+                        <div class="relative">
+                            <input type="file" id="diff-file2" class="hidden" onchange="handleDiffUpload(this, 'diff-input-new')">
+                            <label for="diff-file2" class="cursor-pointer text-xs bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition">📂 Upload</label>
+                        </div>
+                    </div>
+                    <textarea id="diff-input-new" class="flex-grow w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-300 code-font text-xs focus:outline-none focus:border-purple-500 resize-none" placeholder="Plak hier het nieuwe bestand..."></textarea>
+                </div>
+            </div>
+
+            <!-- Action -->
+            <div class="flex justify-center">
+                <button onclick="generateDiff()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-6 rounded shadow-lg transition transform hover:-translate-y-0.5 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 00-1-1H3zm11 4a1 1 0 10-2 0v4a1 1 0 102 0V7zm-3 1a1 1 0 10-2 0v3a1 1 0 102 0V8zM8 9a1 1 0 10-2 0v2a1 1 0 102 0V9z" clip-rule="evenodd" />
+                    </svg>
+                    Vergelijk Code
+                </button>
+            </div>
+
+            <!-- Output -->
+            <div id="diff-output-container" class="hidden pb-10">
+                <h3 class="text-lg font-bold mb-2 text-slate-300">Resultaat:</h3>
+                <div id="diff-result-area" class="rounded-lg overflow-hidden border border-slate-700 shadow-xl"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- JAVASCRIPT LOGICA -->
+    <script>
+        // --- Globale Navigatie ---
+        function switchView(viewName) {
+            // Verberg alles
+            document.getElementById('view-dashboard').classList.add('hidden');
+            document.getElementById('view-tester').classList.add('hidden');
+            document.getElementById('view-diff').classList.add('hidden');
+
+            // Toon gevraagde view
+            if (viewName === 'dashboard') {
+                document.getElementById('view-dashboard').classList.remove('hidden');
+            } else if (viewName === 'tester') {
+                document.getElementById('view-tester').classList.remove('hidden');
+            } else if (viewName === 'diff') {
+                document.getElementById('view-diff').classList.remove('hidden');
+            }
+        }
+
+        // ==========================================
+        // LOGICA: HTML TESTER
+        // ==========================================
+        const testerCodeInput = document.getElementById('tester-code-input');
+        const testerEditorContainer = document.getElementById('tester-editor-container');
+        const testerPreviewContainer = document.getElementById('tester-preview-container');
+        const testerPreviewFrame = document.getElementById('tester-preview-frame');
+        const btnTesterBack = document.getElementById('btn-tester-back');
+        const historyListEl = document.getElementById('history-list');
+
+        let testerHistory = [];
+
+        function toggleTesterMode(mode) {
+            if (mode === 'preview') {
+                testerEditorContainer.classList.add('hidden');
+                testerPreviewContainer.classList.remove('hidden');
+                btnTesterBack.classList.remove('hidden');
+            } else {
+                testerPreviewContainer.classList.add('hidden');
+                testerEditorContainer.classList.remove('hidden');
+                btnTesterBack.classList.add('hidden');
+                testerPreviewFrame.srcdoc = ''; 
+            }
+        }
+
+        function runTesterCode() {
+            const code = testerCodeInput.value;
+            if (!code.trim()) { alert("Voer eerst HTML in!"); return; }
+            addToHistory(code);
+            testerPreviewFrame.srcdoc = code;
+            toggleTesterMode('preview');
+        }
+
+        function handleTesterUpload(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => { testerCodeInput.value = e.target.result; };
+                reader.readAsText(input.files[0]);
+            }
+        }
+
+        function clearTesterEditor() {
+            if(confirm('Editor leegmaken?')) testerCodeInput.value = '';
+        }
+
+        // History Functies
+        function loadHistory() {
+            const stored = localStorage.getItem('htmlTesterHistory');
+            if (stored) testerHistory = JSON.parse(stored);
+            renderHistory();
+        }
+
+        function addToHistory(code) {
+            if (testerHistory.length > 0 && testerHistory[0].code === code) return;
+            const newItem = {
+                code: code,
+                timestamp: new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
+                preview: code.replace(/<[^>]*>?/gm, '').substring(0, 30) || "Code snippet"
+            };
+            testerHistory.unshift(newItem);
+            if (testerHistory.length > 10) testerHistory.pop();
+            localStorage.setItem('htmlTesterHistory', JSON.stringify(testerHistory));
+            renderHistory();
+        }
+
+        function clearHistory() {
+            if(confirm('Geschiedenis wissen?')) {
+                testerHistory = [];
+                localStorage.setItem('htmlTesterHistory', JSON.stringify(testerHistory));
+                renderHistory();
+            }
+        }
+
+        function renderHistory() {
+            historyListEl.innerHTML = '';
+            if (testerHistory.length === 0) {
+                historyListEl.innerHTML = '<p class="text-slate-500 text-xs text-center mt-6 italic">Geen geschiedenis.</p>';
+                return;
+            }
+            testerHistory.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'bg-slate-700 hover:bg-slate-600 p-2 rounded cursor-pointer border border-transparent hover:border-slate-500 transition';
+                div.onclick = () => { testerCodeInput.value = testerHistory[index].code; };
+                div.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs font-bold text-blue-400">#${testerHistory.length - index}</span>
+                        <span class="text-[10px] text-slate-400">${item.timestamp}</span>
+                    </div>
+                    <div class="text-xs text-slate-300 font-mono truncate">${item.preview}</div>
+                `;
+                historyListEl.appendChild(div);
+            });
+        }
+
+        // Start History laden
+        loadHistory();
+
+        // ==========================================
+        // LOGICA: DIFF TOOL
+        // ==========================================
+        let currentDiffMode = 'side-by-side';
+
+        function setDiffMode(mode) {
+            currentDiffMode = mode;
+            const btnSide = document.getElementById('btn-diff-side');
+            const btnLine = document.getElementById('btn-diff-line');
+            
+            if (mode === 'side-by-side') {
+                btnSide.className = 'px-3 py-1.5 rounded transition-colors bg-purple-600 text-white';
+                btnLine.className = 'px-3 py-1.5 rounded transition-colors text-slate-400 hover:bg-slate-700';
+            } else {
+                btnLine.className = 'px-3 py-1.5 rounded transition-colors bg-purple-600 text-white';
+                btnSide.className = 'px-3 py-1.5 rounded transition-colors text-slate-400 hover:bg-slate-700';
+            }
+
+            const container = document.getElementById('diff-output-container');
+            if (!container.classList.contains('hidden')) generateDiff();
+        }
+
+        function handleDiffUpload(input, targetId) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => { document.getElementById(targetId).value = e.target.result; };
+                reader.readAsText(input.files[0]);
+            }
+        }
+
+        function generateDiff() {
+            const oldText = document.getElementById('diff-input-old').value;
+            const newText = document.getElementById('diff-input-new').value;
+            const container = document.getElementById('diff-output-container');
+            const resultArea = document.getElementById('diff-result-area');
+
+            if (!oldText && !newText) { alert("Vul beide velden in."); return; }
+
+            const diffString = Diff.createTwoFilesPatch("Origineel", "Aangepast", oldText, newText);
+            
+            const config = {
+                drawFileList: false,
+                matching: 'lines',
+                outputFormat: currentDiffMode,
+                colorScheme: 'dark'
+            };
+
+            const ui = new Diff2HtmlUI(resultArea, diffString, config);
+            ui.draw();
+            ui.highlightCode();
+
+            container.classList.remove('hidden');
+            // Even wachten met scrollen zodat DOM update klaar is
+            setTimeout(() => {
+                container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+
+    </script>
+</body>
+</html>
