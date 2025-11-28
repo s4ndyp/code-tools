@@ -69,8 +69,9 @@
                 </div>
                 
                 <!-- Zoekbalk toegevoegd -->
+                <!-- De oninput handler is verwijderd om te voorkomen dat de focus verloren gaat tijdens het typen -->
                 <div class="flex gap-2 items-center">
-                    <input type="text" id="search-input" oninput="resetHighlight()" placeholder="Zoekterm..." class="w-full p-2 bg-slate-700 text-slate-200 rounded border border-slate-600 focus:outline-none focus:border-blue-500 text-sm">
+                    <input type="text" id="search-input" placeholder="Zoekterm..." class="w-full p-2 bg-slate-700 text-slate-200 rounded border border-slate-600 focus:outline-none focus:border-blue-500 text-sm">
                     <button onclick="highlightText()" class="flex-shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-medium transition text-sm">
                         Zoek
                     </button>
@@ -107,7 +108,7 @@
         const previewFrame = document.getElementById('preview-frame');
         const btnBack = document.getElementById('btn-back');
         const historyListEl = document.getElementById('history-list');
-        const searchInput = document.getElementById('search-input'); // Nieuwe referentie
+        const searchInput = document.getElementById('search-input'); 
         let history = [];
 
         /**
@@ -133,84 +134,62 @@
         function runCode() {
             const code = codeInput.value;
             if (!code.trim()) { 
-                // Vervang alert() door een custom modal/melding in een productieomgeving.
                 console.error("Voer eerst HTML in!"); 
                 return; 
             }
-            // Zorg ervoor dat de markeringen worden verwijderd voordat we de code uitvoeren
-            resetHighlight(true); 
+            // Zorg ervoor dat de selectie wordt verwijderd voordat we de code uitvoeren
+            clearSelectionAndSearchTerm(true); 
             addToHistory(code);
             previewFrame.srcdoc = code;
             toggleMode('preview');
         }
 
         /**
-         * Markeer alle overeenkomsten van de zoekterm in de textarea.
+         * Selecteer de eerste overeenkomst van de zoekterm in de textarea.
          */
         function highlightText() {
             const searchTerm = searchInput.value.trim();
+            let content = codeInput.value;
             
-            // 1. Verwijder eerst alle bestaande markeringen
-            resetHighlight(false);
+            // Verwijder eerst eventuele eerdere selecties
+            clearSelectionAndSearchTerm(false);
 
             if (searchTerm === '') {
+                // Als de zoekterm leeg is, focus dan gewoon op het zoekveld
+                searchInput.focus();
                 return;
             }
 
-            // De `innerHTML` van een `<textarea>` is niet bewerkbaar, dus we moeten de tekstinhoud bewerken.
-            // Omdat we in een `<textarea>` zitten, is de enige manier om visuele highlighting te doen via JavaScript
-            // de inhoud van de textarea te vervangen door HTML-markering en deze vervolgens te tonen.
-            // Dit is complex in een textarea omdat het een platte tekstveld is.
-            
-            // Een veelgebruikte techniek in code-editors is om de textarea te verbergen
-            // en de inhoud in een <div> te projecteren voor highlighting (zoals in CodeMirror of Ace).
-            
-            // Omdat we de structuur van de applicatie simpel willen houden,
-            // zullen we de highlighting op de platte tekst uitvoeren door een wrapper te gebruiken.
-            
-            // **BELANGRIJK:** De ingebouwde `<textarea>` ondersteunt GEEN HTML-inhoud zoals `<mark>`.
-            // Om highlighting te laten werken, moet de `<textarea>` vervangen worden door een contenteditable `<div>`
-            // of een geavanceerde editor.
-            
-            // Omdat we de `<textarea>` willen behouden, zullen we een **tijdelijke** methode gebruiken
-            // die de gebruiker toestaat te zoeken, maar de markeringen verdwijnen zodra de gebruiker typt.
-
-            let content = codeInput.value;
-            
-            // Escapen van speciale regex-tekens in de zoekterm
-            const escapedSearchTerm = searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-            const regex = new RegExp(`(${escapedSearchTerm})`, 'gi');
-            
-            // Vervang de gevonden tekst door een markering (dit werkt echter niet in een textarea).
-            // We laten de code staan als demonstratie van de *intentie*.
-            // De functionaliteit van de native <textarea> zal dit negeren.
-            // We loggen een bericht om de gebruiker dit uit te leggen in de console.
-            console.warn("LET OP: Native `<textarea>` elementen ondersteunen geen HTML-opmaak (zoals <mark>). Het highlighten van tekst in de editor vereist de implementatie van een geavanceerde code-editor (zoals CodeMirror/Ace) die een <div> gebruikt in plaats van een <textarea>.");
-
-            // **Workaround voor de <textarea>:**
-            // De meest eenvoudige workaround is om de focus naar de gevonden tekst te brengen.
-            // We kunnen de selectie gebruiken:
+            // Zoek naar de eerste index van de term (case-insensitive)
             const index = content.toLowerCase().indexOf(searchTerm.toLowerCase());
+            
             if (index !== -1) {
+                // Selecteer de gevonden tekst in de textarea
                 codeInput.focus();
                 codeInput.setSelectionRange(index, index + searchTerm.length);
+                
+                // Scroll naar de selectie (optioneel, helpt bij lange documenten)
+                // codeInput.scrollTop = (index / content.length) * codeInput.scrollHeight;
+                
+            } else {
+                // Geen resultaten gevonden
+                searchInput.focus();
+                // Je zou hier een visuele feedback kunnen geven, bijvoorbeeld de rand rood maken.
+                console.log(`Zoekterm "${searchTerm}" niet gevonden.`);
             }
         }
 
         /**
-         * Reset de markeringen.
+         * Verwijdert de selectie in de textarea en wist eventueel de zoekbalk.
          * @param {boolean} clearSearch - Indien waar, maak ook de zoekbalk leeg.
          */
-        function resetHighlight(clearSearch = true) {
-            // Aangezien de highlightText functie niet werkt zoals verwacht in een native textarea, 
-            // is deze functie nu voornamelijk bedoeld om de code-editor netjes te houden.
-
+        function clearSelectionAndSearchTerm(clearSearch = true) {
+            // Dit reset de selectie, waardoor de tekst niet meer gemarkeerd is
+            codeInput.setSelectionRange(0, 0); 
+            
             if (clearSearch) {
                 searchInput.value = '';
             }
-            
-            // Reset de selectie
-            codeInput.setSelectionRange(0, 0); 
         }
 
 
@@ -221,7 +200,7 @@
                 const reader = new FileReader();
                 reader.onload = (e) => { 
                     codeInput.value = e.target.result; 
-                    resetHighlight(); // Reset na upload
+                    clearSelectionAndSearchTerm(); // Reset na upload
                 };
                 reader.readAsText(input.files[0]);
             }
@@ -231,7 +210,7 @@
             // Vervang confirm() door een custom modal/melding in een productieomgeving.
             if(confirm('Editor leegmaken?')) {
                 codeInput.value = '';
-                resetHighlight(); // Reset na wissen
+                clearSelectionAndSearchTerm(); // Reset na wissen
             }
         }
 
@@ -273,7 +252,7 @@
                 const div = document.createElement('div');
                 div.className = 'bg-slate-700 hover:bg-slate-600 p-2 rounded cursor-pointer border border-transparent hover:border-slate-500 transition';
                 // Laad de code in de editor en reset de highlight
-                div.onclick = () => { codeInput.value = history[index].code; resetHighlight(); };
+                div.onclick = () => { codeInput.value = history[index].code; clearSelectionAndSearchTerm(); };
                 div.innerHTML = `<div class="flex justify-between items-center mb-1"><span class="text-xs font-bold text-blue-400">#${history.length - index}</span><span class="text-[10px] text-slate-400">${item.timestamp}</span></div><div class="text-xs text-slate-300 font-mono truncate">${item.preview}</div>`;
                 historyListEl.appendChild(div);
             });
