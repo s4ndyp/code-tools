@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="nl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Playground</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { colors: { slate: { 850: '#1e293b', 950: '#020617' } } } }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 5px; }
+        .code-font { font-family: 'Menlo', 'Monaco', 'Courier New', monospace; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans h-screen flex flex-col overflow-hidden">
+
+    <!-- Header met Home link -->
+    <header class="h-14 bg-slate-800 border-b border-slate-700 flex items-center justify-between px-4 shadow-md z-20">
+        <div class="flex items-center gap-4">
+            <a href="index.html" class="text-slate-400 hover:text-white flex items-center gap-1 text-sm font-medium transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+                Home
+            </a>
+            <div class="h-6 w-px bg-slate-600 mx-2"></div>
+            <h1 class="text-lg font-bold tracking-wide">HTML <span class="text-blue-500">Playground</span></h1>
+        </div>
+        <div>
+            <button id="btn-back" onclick="toggleMode('editor')" class="hidden flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white text-sm px-3 py-1.5 rounded transition-colors">
+                Terug naar Editor
+            </button>
+        </div>
+    </header>
+
+    <main class="flex flex-1 relative overflow-hidden">
+        
+        <!-- Editor View -->
+        <div id="editor-container" class="flex w-full h-full">
+            <div class="flex-1 flex flex-col p-4 gap-4 h-full relative">
+                <div class="flex justify-between items-center bg-slate-800 p-2 rounded border border-slate-700">
+                    <div class="flex gap-2">
+                        <label class="cursor-pointer bg-slate-700 hover:bg-slate-600 text-xs sm:text-sm px-3 py-2 rounded flex items-center gap-2 transition text-slate-300 hover:text-white">
+                            <span>Upload</span>
+                            <input type="file" accept=".html,.htm,.txt" class="hidden" onchange="handleFileUpload(this)">
+                        </label>
+                        <button onclick="clearEditor()" class="text-slate-400 hover:text-red-400 text-xs sm:text-sm px-3 py-2 transition">Wissen</button>
+                    </div>
+                    <button onclick="runCode()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-1.5 rounded font-bold shadow-lg shadow-blue-900/50 flex items-center gap-2 transition transform hover:scale-105 text-sm">
+                        RUN
+                    </button>
+                </div>
+                <textarea id="code-input" class="flex-1 w-full bg-slate-800 text-slate-200 code-font text-sm p-4 rounded border border-slate-700 focus:outline-none focus:border-blue-500 resize-none shadow-inner" placeholder="<html>
+  <body>
+    <h1>Hallo Wereld!</h1>
+  </body>
+</html>"></textarea>
+            </div>
+            
+            <!-- Sidebar History -->
+            <div class="w-72 bg-slate-800 border-l border-slate-700 flex flex-col hidden md:flex">
+                <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+                    <h2 class="font-bold text-slate-300 text-sm">Geschiedenis</h2>
+                    <button onclick="clearHistory()" class="text-xs text-slate-500 hover:text-red-400">Wis</button>
+                </div>
+                <div id="history-list" class="flex-1 overflow-y-auto p-2 space-y-2"></div>
+            </div>
+        </div>
+
+        <!-- Preview View (Hidden by default) -->
+        <div id="preview-container" class="hidden w-full h-full bg-white">
+            <iframe id="preview-frame" class="w-full h-full border-none"></iframe>
+        </div>
+    </main>
+
+    <script>
+        const codeInput = document.getElementById('code-input');
+        const editorContainer = document.getElementById('editor-container');
+        const previewContainer = document.getElementById('preview-container');
+        const previewFrame = document.getElementById('preview-frame');
+        const btnBack = document.getElementById('btn-back');
+        const historyListEl = document.getElementById('history-list');
+        let history = [];
+
+        function toggleMode(mode) {
+            if (mode === 'preview') {
+                editorContainer.classList.add('hidden');
+                previewContainer.classList.remove('hidden');
+                btnBack.classList.remove('hidden');
+            } else {
+                previewContainer.classList.add('hidden');
+                editorContainer.classList.remove('hidden');
+                btnBack.classList.add('hidden');
+                previewFrame.srcdoc = ''; 
+            }
+        }
+
+        function runCode() {
+            const code = codeInput.value;
+            if (!code.trim()) { alert("Voer eerst HTML in!"); return; }
+            addToHistory(code);
+            previewFrame.srcdoc = code;
+            toggleMode('preview');
+        }
+
+        function handleFileUpload(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => { codeInput.value = e.target.result; };
+                reader.readAsText(input.files[0]);
+            }
+        }
+
+        function clearEditor() {
+            if(confirm('Editor leegmaken?')) codeInput.value = '';
+        }
+
+        function loadHistory() {
+            const stored = localStorage.getItem('htmlTesterHistory');
+            if (stored) history = JSON.parse(stored);
+            renderHistory();
+        }
+
+        function addToHistory(code) {
+            if (history.length > 0 && history[0].code === code) return;
+            const newItem = {
+                code: code,
+                timestamp: new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
+                preview: code.replace(/<[^>]*>?/gm, '').substring(0, 30) || "Code snippet"
+            };
+            history.unshift(newItem);
+            if (history.length > 10) history.pop();
+            localStorage.setItem('htmlTesterHistory', JSON.stringify(history));
+            renderHistory();
+        }
+
+        function clearHistory() {
+            if(confirm('Geschiedenis wissen?')) {
+                history = [];
+                localStorage.setItem('htmlTesterHistory', JSON.stringify(history));
+                renderHistory();
+            }
+        }
+
+        function renderHistory() {
+            historyListEl.innerHTML = '';
+            if (history.length === 0) {
+                historyListEl.innerHTML = '<p class="text-slate-500 text-xs text-center mt-6 italic">Geen geschiedenis.</p>';
+                return;
+            }
+            history.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'bg-slate-700 hover:bg-slate-600 p-2 rounded cursor-pointer border border-transparent hover:border-slate-500 transition';
+                div.onclick = () => { codeInput.value = history[index].code; };
+                div.innerHTML = `<div class="flex justify-between items-center mb-1"><span class="text-xs font-bold text-blue-400">#${history.length - index}</span><span class="text-[10px] text-slate-400">${item.timestamp}</span></div><div class="text-xs text-slate-300 font-mono truncate">${item.preview}</div>`;
+                historyListEl.appendChild(div);
+            });
+        }
+        
+        loadHistory();
+    </script>
+</body>
+</html>
