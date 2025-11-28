@@ -1,0 +1,61 @@
+name: Docker Build and Publish
+
+# Deze workflow draait wanneer er gepusht wordt naar de 'main' branch
+on:
+  push:
+    branches: [ "main" ]
+  # Optioneel: draai ook bij pull requests om te testen of de build slaagt
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  # We gebruiken GitHub Container Registry (ghcr.io)
+  # Als je Docker Hub wilt gebruiken, verander dit dan naar 'docker.io'
+  REGISTRY: ghcr.io
+  # De naam van de image wordt standaard ingesteld op 'gebruiker/repo'
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Rechten die nodig zijn om de package te uploaden naar GitHub Packages
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Installeer Docker Buildx (nodig voor geavanceerde builds)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Login bij de registry (GHCR in dit geval)
+      # GITHUB_TOKEN wordt automatisch door GitHub aangemaakt, je hoeft niets in te stellen
+      - name: Log in to the Container registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Genereer automatisch tags en labels op basis van git commits
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+
+      # Bouw de image en push deze naar de registry
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
