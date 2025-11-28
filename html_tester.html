@@ -28,6 +28,15 @@
         textarea::placeholder {
             color: #475569; /* slate-600 */
         }
+        
+        /* Visuele feedback voor favorieten */
+        .favorite-btn:hover {
+            color: #f59e0b; /* amber-500 */
+        }
+        .is-favorite svg {
+            fill: #f59e0b; /* amber-500 */
+            stroke: #f59e0b;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans h-screen flex flex-col overflow-hidden">
@@ -94,7 +103,7 @@
             <div class="w-72 bg-slate-800 border-l border-slate-700 flex flex-col hidden md:flex">
                 <div class="p-4 border-b border-slate-700 flex justify-between items-center">
                     <h2 class="font-bold text-slate-300 text-sm">Geschiedenis</h2>
-                    <button onclick="clearHistory()" class="text-xs text-slate-500 hover:text-red-400">Wis</button>
+                    <button onclick="clearHistory()" class="text-xs text-slate-500 hover:text-red-400">Wis (niet-favorieten)</button>
                 </div>
                 <div id="history-list" class="flex-1 overflow-y-auto p-2 space-y-2"></div>
             </div>
@@ -235,43 +244,114 @@
 
         // --- Geschiedenis Functies ---
 
+        function saveHistory() {
+            localStorage.setItem('htmlTesterHistory', JSON.stringify(history));
+        }
+
         function loadHistory() {
             const stored = localStorage.getItem('htmlTesterHistory');
-            if (stored) history = JSON.parse(stored);
+            // Zorg ervoor dat de 'isFavorite' property bestaat, zelfs voor oudere items
+            if (stored) {
+                history = JSON.parse(stored).map(item => ({
+                    ...item,
+                    isFavorite: item.isFavorite || false // Voeg isFavorite toe indien afwezig
+                }));
+            }
             renderHistory();
         }
 
         function addToHistory(code) {
-            if (history.length > 0 && history[0].code === code) return;
+            // Check of het laatste item hetzelfde is om duplicaten te voorkomen
+            if (history.length > 0 && history[0].code === code) return; 
+
             const newItem = {
                 code: code,
                 timestamp: new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
-                preview: code.replace(/<[^>]*>?/gm, '').substring(0, 30) || "Code snippet"
+                preview: code.replace(/<[^>]*>?/gm, '').substring(0, 30) || "Code snippet",
+                isFavorite: false // Nieuw item is standaard geen favoriet
             };
+
+            // Plaats het nieuwe item vooraan
             history.unshift(newItem);
-            if (history.length > 10) history.pop();
-            localStorage.setItem('htmlTesterHistory', JSON.stringify(history));
+
+            // Verwijder het oudste item (tenzij het een favoriet is)
+            while (history.length > 10) {
+                const lastIndex = history.length - 1;
+                if (!history[lastIndex].isFavorite) {
+                    history.pop();
+                } else {
+                    // Als het laatste item een favoriet is, stoppen we met verwijderen
+                    // Dit zorgt ervoor dat de limiet van 10 alleen geldt voor NIET-favorieten.
+                    break; 
+                }
+            }
+
+            saveHistory();
             renderHistory();
         }
 
+        // AANGEPASTE FUNCTIE: Verwijdert alleen NIET-favoriete items
         function clearHistory() {
-            history = [];
-            localStorage.setItem('htmlTesterHistory', JSON.stringify(history));
+            const favorites = history.filter(item => item.isFavorite);
+            history = favorites; // Behoud alleen de favorieten
+            saveHistory();
             renderHistory();
-            console.log('Geschiedenis is gewist.');
+            if (favorites.length === 0) {
+                console.log('Geschiedenis is volledig gewist.');
+            } else {
+                console.log(`Niet-favoriete geschiedenis is gewist. ${favorites.length} favorieten zijn behouden.`);
+            }
+        }
+        
+        // NIEUWE FUNCTIE: Toggle de favoriet-status van een item
+        function toggleFavorite(index, event) {
+            event.stopPropagation(); // Voorkom dat de klik de code in de editor laadt
+            // Index is de index in de actuele 'history' array
+            history[index].isFavorite = !history[index].isFavorite;
+            saveHistory();
+            renderHistory(); // Herteken de lijst om de nieuwe status te tonen
         }
 
+        // AANGEPASTE FUNCTIE: Rendert de geschiedenis inclusief favoriet-knop
         function renderHistory() {
             historyListEl.innerHTML = '';
             if (history.length === 0) {
                 historyListEl.innerHTML = '<p class="text-slate-500 text-xs text-center mt-6 italic">Geen geschiedenis.</p>';
                 return;
             }
+            
+            // Render de items in de geschiedenis
             history.forEach((item, index) => {
                 const div = document.createElement('div');
-                div.className = 'bg-slate-700 hover:bg-slate-600 p-2 rounded cursor-pointer border border-transparent hover:border-slate-500 transition';
-                div.onclick = () => { codeInput.value = history[index].code; resetSearch(); };
-                div.innerHTML = `<div class="flex justify-between items-center mb-1"><span class="text-xs font-bold text-blue-400">#${history.length - index}</span><span class="text-[10px] text-slate-400">${item.timestamp}</span></div><div class="text-xs text-slate-300 font-mono truncate">${item.preview}</div>`;
+                // Voeg een visuele hint toe voor favorieten
+                const favoriteClass = item.isFavorite ? 'border-amber-500 ring-2 ring-amber-500/50' : 'border-transparent hover:border-slate-500';
+
+                div.className = `bg-slate-700 hover:bg-slate-600 p-2 rounded cursor-pointer transition relative ${favoriteClass}`;
+                
+                // Klik op de div laadt de code
+                div.onclick = () => { codeInput.value = item.code; resetSearch(); }; 
+                
+                // Content van het geschiedenisitem
+                div.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs font-bold ${item.isFavorite ? 'text-amber-400' : 'text-blue-400'}">#${history.length - index}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] text-slate-400">${item.timestamp}</span>
+                            <!-- Favoriet-knop -->
+                            <button 
+                                class="favorite-btn ${item.isFavorite ? 'is-favorite' : 'text-slate-500 hover:text-amber-500'}"
+                                onclick="toggleFavorite(${index}, event)"
+                                title="${item.isFavorite ? 'Favoriet uitschakelen' : 'Toevoegen aan favorieten'}"
+                            >
+                                <!-- Ster-icoon (lucide-react, maar als SVG) -->
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-xs text-slate-300 font-mono truncate">${item.preview}</div>
+                `;
                 historyListEl.appendChild(div);
             });
         }
