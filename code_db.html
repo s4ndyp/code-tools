@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Versiebeheer</title>
+    <!-- Laad Tailwind CSS voor snelle styling en het donkere thema -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome voor prullenbak icoon en klembord icoon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    
+    <script type="module">
+        // Globale constantes voor localStorage sleutels
+        const STORAGE_KEY_FILES = 'code_files_v3'; // Versie van de data structuur verhoogd
+        const STORAGE_KEY_ACTIVE_FILE = 'active_file_id_v3';
+        const STORAGE_KEY_ACTIVE_BRANCH = 'active_branch_id_v3'; // Nieuwe sleutel
+
+        // Globale staat
+        let activeFileId = localStorage.getItem(STORAGE_KEY_ACTIVE_FILE) || null;
+        let activeBranchId = localStorage.getItem(STORAGE_KEY_ACTIVE_BRANCH) || null; // De ID van de branch waar we momenteel in werken
+        let expandedFileId = activeFileId; // De ID van het bestand waarvan de branches momenteel zichtbaar zijn.
+        let expandedBranchId = activeBranchId; // De ID van de branch waarvan de versies momenteel zichtbaar zijn.
+        let isEditing = false; // Nieuwe staat voor de bewerkingsmodus
+        
+        // --- HULPFUNCTIES ---
+
+        /**
+         * Genereert een unieke ID (eenvoudige UUID-achtige string).
+         */
+        const generateId = () => {
+            return Math.random().toString(36).substring(2, 9);
+        };
+
+        /**
+         * Converteert een timestamp naar een leesbaar, gelokaliseerd datum/tijd-formaat.
+         * @param {number} timestamp - De Unix timestamp in milliseconden.
+         * @returns {string} - De geformatteerde datum/tijd string.
+         */
+        const formatTimestamp = (timestamp) => {
+            if (!timestamp) return 'Onbekende datum';
+            return new Date(timestamp).toLocaleString('nl-NL', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        };
+
+        // --- LOCAL STORAGE OPSLAAN/LADEN ---
+
+        function getAllFiles() {
+            const storedData = localStorage.getItem(STORAGE_KEY_FILES);
+            return storedData ? JSON.parse(storedData) : [];
+        }
+
+        function saveAllFiles(files) {
+            localStorage.setItem(STORAGE_KEY_FILES, JSON.stringify(files));
+        }
+
+        function getFileById(fileId) {
+            const files = getAllFiles();
+            return files.find(f => f.id === fileId) || null;
+        }
+
+        function getBranchById(fileId, branchId) {
+            const file = getFileById(fileId);
+            return file ? file.branches.find(b => b.id === branchId) : null;
+        }
+
+        /**
+         * Zoekt de nieuwste versie in de Main Branch van een bestand.
+         */
+        function getMainBranchLatestVersion(file) {
+            const mainBranch = file.branches.find(b => b.isMain);
+            if (mainBranch && mainBranch.versions.length > 0) {
+                return mainBranch.versions[0];
+            }
+            return { major: 0 };
+        }
+
+        /**
+         * Laadt de code van de nieuwste versie van de actieve branch/file in de editor.
+         */
+        function loadActiveFile() {
+            const file = getFileById(activeFileId);
+            const branch = getBranchById(activeFileId, activeBranchId);
+
+            if (branch && branch.versions.length > 0) {
+                // Laad de nieuwste versie in de editor
+                const latestVersion = branch.versions[0];
+                document.getElementById('code-editor').value = latestVersion.code;
+                
+                // Stel UI expansie in
+                expandedFileId = activeFileId;
+                expandedBranchId = activeBranchId;
+                
+            } else if (file) {
+                // Bestand actief, maar misschien nog geen branch/versie
+                document.getElementById('code-editor').value = `/* Bestand '${file.name}' is actief. Maak een nieuwe branch of verhoog de versie. */`;
+            } else {
+                // Geen actief bestand
+                document.getElementById('code-editor').value = `
+/*
+  Welkom bij je Code Versiebeheer App!
+  Klik op 'Nieuwe Code Opslaan' om een nieuw bestand te starten.
+*/
+`;
+                expandedFileId = null;
+                expandedBranchId = null;
+            }
+            renderVersionHistory(getAllFiles());
+        }
+
+        // --- ACTIES: NIEUW BESTAND OPSLAAN ---
+
+        /**
+         * Slaat de huidige code op als een NIEUW bestand/project met een Main Branch.
+         */
+        function saveNewFile() {
+            const codeContent = document.getElementById('code-editor').value;
+
+            if (codeContent.trim() === '') {
+                showToast("Kan geen leeg nieuw bestand opslaan.", 'bg-red-500');
+                return;
+            }
+
+            const fileName = prompt(`Geef een naam op voor het nieuwe bestand/project:`);
+            if (!fileName || fileName.trim() === '') {
+                showToast("Opslag geannuleerd of ongeldige naam.", 'bg-red-500');
+                return;
+            }
+
+            const files = getAllFiles();
+            const newFileId = generateId();
+            const mainBranchId = generateId();
+
+            const newVersion = {
+                id: generateId(), 
+                code: codeContent,
+                timestamp: Date.now(),
+                major: 1, // Start op 1.0
+                minor: 0, 
+                // Aangepaste naam
+                name: "V1.0 - Eerste Commit",
+                isStable: false, 
+                isTest: false,
+            };
+
+            const mainBranch = {
+                id: mainBranchId,
+                name: 'Main',
+                isMain: true,
+                versions: [newVersion],
+            };
+
+            const newFile = {
+                id: newFileId,
+                name: fileName,
+                branches: [mainBranch],
+            };
+
+            files.unshift(newFile); 
+            saveAllFiles(files);
+            
+            setActiveFile(newFileId, mainBranchId); 
+            showToast(`Nieuw bestand '${fileName}' succesvol opgeslagen!`, 'bg-green-500');
+        }
+        
+        // --- ACTIES: NIEUWE BRANCH MAKEN ---
+        
+        /**
+         * Maakt een nieuwe feature/sub-branch aan gebaseerd op de nieuwste Main Versie.
+         */
+        window.createNewBranch = () => {
+            if (!activeFileId) {
+                showToast("Geen actief bestand geselecteerd. Start een nieuw bestand.", 'bg-red-500');
+                return;
+            }
+            
+            const files = getAllFiles();
+            const fileIndex = files.findIndex(f => f.id === activeFileId);
+            if (fileIndex === -1) return;
+
+            const file = files[fileIndex];
+            const mainLatest = getMainBranchLatestVersion(file);
+
+            if (mainLatest.major === 0) {
+                showToast("Main Branch heeft nog geen versies om van af te takken.", 'bg-red-500');
+                return;
+            }
+
+            // Vraag om de subtitel van de branch (hoofdnaam is de bestandsnaam)
+            const branchSubTitle = prompt(`Nieuwe Branch Subtitel voor ${file.name} (bijv: Feature/Search):`);
+            if (!branchSubTitle || branchSubTitle.trim() === '') {
+                showToast("Opslag geannuleerd of ongeldige subtitel.", 'bg-red-500');
+                return;
+            }
+
+            const branchId = generateId();
+            
+            // De eerste versie in de nieuwe branch
+            const newVersion = {
+                id: generateId(),
+                code: document.getElementById('code-editor').value, // Code van de editor
+                timestamp: Date.now(),
+                major: mainLatest.major, // Gebruik de major versie van de main branch
+                minor: 1, // Start altijd met .1 in de nieuwe branch
+                // Aangepaste naam
+                name: `${branchSubTitle} V${mainLatest.major}.1`,
+                isStable: false,
+                isTest: true, // Nieuwe branches zijn vaak test
+            };
+
+            const newBranch = {
+                id: branchId,
+                name: branchSubTitle,
+                isMain: false,
+                baseMajor: mainLatest.major,
+                versions: [newVersion],
+            };
+
+            // Voeg de nieuwe branch toe aan het begin van de lijst (na Main)
+            file.branches.push(newBranch);
+            saveAllFiles(files);
+            
+            setActiveFile(file.id, branchId);
+            showToast(`Nieuwe Branch '${branchSubTitle}' aangemaakt, aftakkend van Main v${mainLatest.major}.`, 'bg-indigo-600');
+        };
+
+        // --- ACTIES: VERSIE OPHOGEN ---
+
+        /**
+         * Voegt de huidige code toe als een nieuwe versie aan de actieve branch.
+         */
+        window.saveBranchVersion = () => {
+            if (!activeFileId || !activeBranchId) {
+                showToast("Geen actieve branch geselecteerd. Selecteer of maak een branch aan.", 'bg-red-500');
+                return;
+            }
+
+            const codeContent = document.getElementById('code-editor').value;
+            if (codeContent.trim() === '') {
+                showToast("Kan geen lege versie ophogen.", 'bg-red-500');
+                return;
+            }
+
+            const files = getAllFiles();
+            const fileIndex = files.findIndex(f => f.id === activeFileId);
+            if (fileIndex === -1) return;
+
+            const file = files[fileIndex];
+            const branchIndex = file.branches.findIndex(b => b.id === activeBranchId);
+            if (branchIndex === -1) return;
+
+            const activeBranch = file.branches[branchIndex];
+            const latestVersion = activeBranch.versions.length > 0 ? activeBranch.versions[0] : null;
+
+            let major, minor;
+            let versionName;
+
+            if (activeBranch.isMain) {
+                // Main Branch: verhoog de major versie (1 -> 2)
+                major = latestVersion ? latestVersion.major + 1 : 1;
+                minor = 0;
+                // Aangepaste naam
+                versionName = `V${major}.0 - Main Commit`;
+            } else {
+                // Feature Branch: behoud de major versie en verhoog de minor (3.1 -> 3.2)
+                major = activeBranch.baseMajor;
+                minor = latestVersion ? latestVersion.minor + 1 : 1;
+                // Aangepaste naam
+                versionName = `${activeBranch.name} V${major}.${minor}`;
+            }
+
+            const newVersion = {
+                id: generateId(),
+                code: codeContent,
+                timestamp: Date.now(),
+                major: major,
+                minor: minor,
+                name: versionName,
+                isStable: activeBranch.isMain ? true : false, // Main is default Stable
+                isTest: activeBranch.isMain ? false : true,  // Feature is default Test
+            };
+
+            // Voeg de nieuwe versie toe aan het begin van de versies (nieuwste bovenaan)
+            activeBranch.versions.unshift(newVersion);
+            saveAllFiles(files);
+            
+            // Herlaad de geschiedenis om de UI bij te werken
+            renderVersionHistory(files); 
+            showToast(`Versie opgehoogd naar ${major}.${minor} in branch '${activeBranch.name}'.`, 'bg-green-500');
+        };
+        
+        /**
+         * Kopieert de inhoud van de code-editor naar het klembord.
+         */
+        window.copyCodeToClipboard = () => {
+            const textarea = document.getElementById('code-editor');
+            
+            // Gebruik execCommand('copy') voor compatibiliteit in iframes
+            try {
+                textarea.select();
+                const success = document.execCommand('copy');
+                if (success) {
+                    showToast("Code gekopieerd naar klembord!", 'bg-green-600');
+                } else {
+                    showToast("Kopiëren mislukt. Probeer handmatig te selecteren.", 'bg-red-500');
+                }
+            } catch (err) {
+                console.error('Fout bij kopiëren:', err);
+                showToast("Kopiëren mislukt. Probeer handmatig te selecteren.", 'bg-red-500');
+            }
+        };
+
+        // --- DATA EXPORT/IMPORT LOGICA ---
+
+        /**
+         * Exporteert alle Local Storage data naar een JSON-bestand.
+         */
+        window.exportData = () => {
+            const allFiles = getAllFiles();
+            if (allFiles.length === 0) {
+                showToast("Geen gegevens om te exporteren.", 'bg-red-500');
+                return;
+            }
+            const dataStr = JSON.stringify(allFiles, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            
+            // Maak een downloadlink
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const date = new Date().toISOString().slice(0, 10);
+            link.download = `code_version_backup_${date}.json`;
+            
+            // Activeer de download en ruim op
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            showToast("Gegevens succesvol geëxporteerd!", 'bg-indigo-600');
+        };
+
+        /**
+         * Triggert de import van data uit een JSON-bestand.
+         */
+        window.triggerImport = () => {
+            document.getElementById('importFile').click();
+        };
+
+        /**
+         * Verwerkt het geselecteerde JSON-bestand voor import.
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            const importInput = document.getElementById('importFile');
+            if (importInput) {
+                importInput.addEventListener('change', handleImport);
+            }
+            loadActiveFile(); 
+            document.getElementById('storage-info').textContent = 'Opslag: Local Storage (Browser)';
+        });
+
+        function handleImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedFiles = JSON.parse(e.target.result);
+                    
+                    if (!Array.isArray(importedFiles)) {
+                        throw new Error("Ongeldig JSON-formaat: verwacht een array.");
+                    }
+
+                    // Eenvoudige validatie: controleer of het op onze structuur lijkt
+                    if (importedFiles.length > 0 && (!importedFiles[0].id || !Array.isArray(importedFiles[0].branches))) {
+                         throw new Error("Ongeldige datastructuur in JSON. Zorg ervoor dat het een geldige backup is.");
+                    }
+
+                    if (!confirm(`Weet je zeker dat je ${importedFiles.length} bestanden wilt importeren? Dit zal alle HUIDIGE data OVERSSCHRIJVEN.`)) {
+                        showToast("Import geannuleerd.", 'bg-gray-500');
+                        return;
+                    }
+                    
+                    // Overschrijf de opslag en reset de actieve status
+                    saveAllFiles(importedFiles);
+                    activeFileId = null;
+                    activeBranchId = null;
+                    localStorage.removeItem(STORAGE_KEY_ACTIVE_FILE);
+                    localStorage.removeItem(STORAGE_KEY_ACTIVE_BRANCH);
+                    loadActiveFile();
+                    
+                    showToast(`Succesvol ${importedFiles.length} bestanden geïmporteerd!`, 'bg-green-600');
+
+                } catch (error) {
+                    console.error("Fout bij importeren:", error);
+                    showToast(`Import mislukt: ${error.message}`, 'bg-red-600');
+                }
+            };
+            reader.readAsText(file);
+            
+            // Reset de input om het opnieuw importeren van hetzelfde bestand toe te staan
+            event.target.value = null; 
+        }
+
+        // --- SCHAKEL LOGICA ---
+
+        /**
+         * Stelt een bestand en branch in als actief en werkt de editor bij.
+         * @param {string} fileId - De ID van het te activeren bestand.
+         * @param {string} branchId - De ID van de te activeren branch.
+         */
+        window.setActiveFile = (fileId, branchId) => {
+            activeFileId = fileId;
+            activeBranchId = branchId; 
+            expandedFileId = fileId; // Klap de file uit
+            expandedBranchId = branchId; // Klap de branch uit
+            localStorage.setItem(STORAGE_KEY_ACTIVE_FILE, fileId);
+            localStorage.setItem(STORAGE_KEY_ACTIVE_BRANCH, branchId);
+
+            const branch = getBranchById(fileId, branchId);
+            const file = getFileById(fileId);
+
+            if (branch && branch.versions.length > 0) {
+                const latestVersion = branch.versions[0];
+                document.getElementById('code-editor').value = latestVersion.code;
+                showToast(`Bestand '${file.name}', Branch '${branch.name}' geactiveerd.`, 'bg-indigo-600');
+            } else {
+                document.getElementById('code-editor').value = `/* Bestand '${file.name}', Branch '${branch.name}' is actief. Geen versies gevonden. */`;
+            }
+            renderVersionHistory(getAllFiles());
+        };
+
+        /**
+         * Laadt een specifieke versie in de editor.
+         * @param {string} fileId - De ID van het bestand.
+         * @param {string} branchId - De ID van de branch.
+         * @param {string} versionId - De ID van de versie.
+         */
+        window.switchVersionHandler = (fileId, branchId, versionId) => {
+            if (isEditing) return; // Negeer klik als we in bewerkmodus zijn
+
+            const file = getFileById(fileId);
+            const branch = getBranchById(fileId, branchId);
+            if (!file || !branch) return;
+
+            const version = branch.versions.find(v => v.id === versionId);
+
+            if (version) {
+                // Als we van branch wisselen, stel de nieuwe branch in als actief
+                if (activeBranchId !== branchId) {
+                    setActiveFile(fileId, branchId);
+                }
+                
+                // Update de editor
+                document.getElementById('code-editor').value = version.code;
+                showToast(`Versie ${version.major}.${version.minor} geladen uit branch '${branch.name}'.`, 'bg-blue-600');
+                
+                // Markeer de geladen versie in de editor status
+                const editorTitle = document.getElementById('editor-title-status');
+                editorTitle.textContent = ` (Actief: ${file.name} / Branch: ${branch.name} / Geladen: ${version.major}.${version.minor})`;
+                editorTitle.classList.remove('text-green-400');
+                editorTitle.classList.add('text-blue-400');
+            }
+        };
+        
+        /**
+         * Klapt de branches van een bestand in of uit.
+         */
+        window.toggleBranches = (fileId) => {
+            if (isEditing) return; // Negeer klik als we in bewerkmodus zijn
+
+            if (expandedFileId && expandedFileId !== fileId) {
+                const oldContainer = document.getElementById(`branch-list-container-${expandedFileId}`);
+                if (oldContainer) oldContainer.classList.add('hidden');
+            }
+
+            const currentContainer = document.getElementById(`branch-list-container-${fileId}`);
+            const currentCaret = document.getElementById(`file-caret-${fileId}`);
+
+            if (currentContainer.classList.contains('hidden')) {
+                currentContainer.classList.remove('hidden');
+                currentCaret.classList.add('rotate-180');
+                expandedFileId = fileId;
+            } else {
+                currentContainer.classList.add('hidden');
+                currentCaret.classList.remove('rotate-180');
+                expandedFileId = null;
+            }
+        };
+
+        /**
+         * Klapt de versies van een branch in of uit.
+         */
+        window.toggleVersions = (branchId) => {
+            if (isEditing) return; // Negeer klik als we in bewerkmodus zijn
+
+             // 1. Klap de eerder uitgeklapte branch in (indien verschillend)
+            if (expandedBranchId && expandedBranchId !== branchId) {
+                const oldContainer = document.getElementById(`version-list-container-${expandedBranchId}`);
+                const oldCaret = document.getElementById(`branch-caret-${expandedBranchId}`);
+                if (oldContainer) oldContainer.classList.add('hidden');
+                if (oldCaret) oldCaret.classList.remove('rotate-180');
+            }
+
+            const currentContainer = document.getElementById(`version-list-container-${branchId}`);
+            const currentCaret = document.getElementById(`branch-caret-${branchId}`);
+
+            if (currentContainer.classList.contains('hidden')) {
+                // 2. Klap de nieuwe branch uit
+                currentContainer.classList.remove('hidden');
+                currentCaret.classList.add('rotate-180');
+                expandedBranchId = branchId;
+            } else {
+                // 3. Klap de huidige branch in
+                currentContainer.classList.add('hidden');
+                currentCaret.classList.remove('rotate-180');
+                expandedBranchId = null;
+            }
+        };
+
+
+        /**
+         * Schakelt de stable/test labelstatus van een specifieke versie in localStorage.
+         */
+        window.toggleVersionLabel = (fileId, branchId, versionId, labelType) => {
+            if (isEditing) return; // Negeer klik als we in bewerkmodus zijn
+
+            const files = getAllFiles();
+            const fileIndex = files.findIndex(f => f.id === fileId);
+            const branchIndex = files[fileIndex]?.branches.findIndex(b => b.id === branchId);
+            
+            if (fileIndex === -1 || branchIndex === -1) return;
+
+            const versionIndex = files[fileIndex].branches[branchIndex].versions.findIndex(v => v.id === versionId);
+            
+            if (versionIndex === -1) return;
+            
+            const currentStatus = files[fileIndex].branches[branchIndex].versions[versionIndex][labelType];
+            files[fileIndex].branches[branchIndex].versions[versionIndex][labelType] = !currentStatus;
+
+            saveAllFiles(files);
+            renderVersionHistory(files); 
+            showToast(`${labelType === 'isStable' ? 'Stable' : 'Test'} label ${!currentStatus ? 'ingeschakeld' : 'uitgeschakeld'}.`, 'bg-indigo-600');
+        };
+
+        // --- VERWIJDER LOGICA ---
+
+        /**
+         * Schakelt de bewerkingsmodus in/uit en rendert de geschiedenis opnieuw.
+         */
+        window.toggleEditMode = () => {
+            isEditing = !isEditing;
+            const editButton = document.getElementById('edit-mode-button');
+            editButton.classList.toggle('bg-red-500', isEditing);
+            editButton.classList.toggle('hover:bg-red-600', isEditing);
+            editButton.classList.toggle('bg-gray-600', !isEditing);
+            editButton.classList.toggle('hover:bg-gray-700', !isEditing);
+            editButton.textContent = isEditing ? 'Bewerk Modus (Aan)' : 'Bewerk Modus (Uit)';
+
+            showToast(isEditing ? "Bewerk Modus Ingeschakeld. Klik op prullenbakjes om te verwijderen." : "Bewerk Modus Uitgeschakeld.", 'bg-yellow-600');
+            renderVersionHistory(getAllFiles());
+        };
+
+        /**
+         * Verwijdert een heel bestand (en al zijn branches/versies).
+         */
+        window.deleteFile = (fileId) => {
+            // Gebruik een custom modale dialoog in een echte app, hier gebruiken we confirm() als placeholder
+            if (!confirm("Weet je zeker dat je dit HELE bestand en alle branches wilt verwijderen?")) return;
+
+            let files = getAllFiles();
+            files = files.filter(f => f.id !== fileId);
+            saveAllFiles(files);
+
+            if (activeFileId === fileId) {
+                activeFileId = null;
+                activeBranchId = null;
+                localStorage.removeItem(STORAGE_KEY_ACTIVE_FILE);
+                localStorage.removeItem(STORAGE_KEY_ACTIVE_BRANCH);
+                loadActiveFile(); // Laadt default view
+            } else {
+                renderVersionHistory(files);
+            }
+            showToast("Bestand succesvol verwijderd.", 'bg-red-600');
+        };
+
+        /**
+         * Verwijdert een specifieke branch.
+         */
+        window.deleteBranch = (fileId, branchId) => {
+            // Gebruik een custom modale dialoog in een echte app, hier gebruiken we confirm() als placeholder
+            if (!confirm("Weet je zeker dat je deze BRANCH en alle versies erin wilt verwijderen?")) return;
+
+            const files = getAllFiles();
+            const fileIndex = files.findIndex(f => f.id === fileId);
+            if (fileIndex === -1) return;
+            
+            files[fileIndex].branches = files[fileIndex].branches.filter(b => b.id !== branchId);
+
+            // Als de actieve branch wordt verwijderd, schakel terug naar Main, of de eerste branch
+            if (activeFileId === fileId && activeBranchId === branchId) {
+                const mainBranch = files[fileIndex].branches.find(b => b.isMain) || files[fileIndex].branches[0];
+                if (mainBranch) {
+                    setActiveFile(fileId, mainBranch.id);
+                } else {
+                    // Geen branches meer over, deactiveer file
+                    activeFileId = null;
+                    activeBranchId = null;
+                    localStorage.removeItem(STORAGE_KEY_ACTIVE_FILE);
+                    localStorage.removeItem(STORAGE_KEY_ACTIVE_BRANCH);
+                    loadActiveFile();
+                }
+            } else {
+                saveAllFiles(files);
+                renderVersionHistory(files);
+            }
+            showToast("Branch succesvol verwijderd.", 'bg-red-600');
+        };
+
+        /**
+         * Verwijdert een specifieke versie.
+         */
+        window.deleteVersion = (fileId, branchId, versionId) => {
+            // Gebruik een custom modale dialoog in een echte app, hier gebruiken we confirm() als placeholder
+            if (!confirm("Weet je zeker dat je deze VERSIE wilt verwijderen?")) return;
+
+            const files = getAllFiles();
+            const fileIndex = files.findIndex(f => f.id === fileId);
+            const branchIndex = files[fileIndex]?.branches.findIndex(b => b.id === branchId);
+            if (fileIndex === -1 || branchIndex === -1) return;
+
+            let branch = files[fileIndex].branches[branchIndex];
+            branch.versions = branch.versions.filter(v => v.id !== versionId);
+
+            saveAllFiles(files);
+            renderVersionHistory(files);
+            showToast("Versie succesvol verwijderd.", 'bg-red-600');
+        };
+
+
+        // --- UI RENDERING ---
+
+        /**
+         * Rendert de lijst met bestanden, branches en hun versies.
+         */
+        function renderVersionHistory(files) {
+            const historyContainer = document.getElementById('version-history');
+            historyContainer.innerHTML = '';
+            
+            const editorTitle = document.getElementById('editor-title-status');
+            editorTitle.classList.remove('text-blue-400');
+            editorTitle.classList.add('text-green-400');
+
+            if (files.length === 0) {
+                historyContainer.innerHTML = `<p class="p-4 text-gray-400 text-sm">Nog geen bestanden opgeslagen. Gebruik de knop 'Nieuwe Code Opslaan'.</p>`;
+                editorTitle.textContent = " (Geen actief bestand)";
+                return;
+            }
+            
+            let activeFileName = "Geen";
+            let activeBranchName = "Geen";
+
+            files.forEach((file) => {
+                const isActiveFile = file.id === activeFileId;
+                const isExpandedFile = file.id === expandedFileId;
+
+                if (isActiveFile) {
+                    activeFileName = file.name;
+                    const activeBranch = file.branches.find(b => b.id === activeBranchId);
+                    activeBranchName = activeBranch ? activeBranch.name : 'Geen';
+                    editorTitle.textContent = ` (Actief: ${file.name} / Branch: ${activeBranchName})`;
+                }
+
+                // 1. Bestandstitel (klapt branches uit)
+                const fileItem = document.createElement('li');
+                // Lettergrootte: text-lg op titel, p-3 is voldoende opvulling
+                fileItem.className = `p-3 mt-2 transition duration-150 rounded-md ${isActiveFile ? 'bg-green-700/50 border-2 border-green-500' : 'bg-gray-700/50 hover:bg-gray-700'}`;
+                
+                fileItem.innerHTML = `
+                    <div class="flex justify-between items-center text-white cursor-pointer" onclick="window.toggleBranches('${file.id}')">
+                        <div class="flex items-center space-x-2 truncate">
+                            ${!isEditing ? 
+                                `<svg id="file-caret-${file.id}" class="w-4 h-4 transition-transform duration-200 ${isExpandedFile ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`
+                                : ''}
+                            <span class="truncate font-bold text-lg">${file.name} ${isActiveFile ? ' (Huidig)' : ''}</span>
+                        </div>
+                        
+                        <div class="flex items-center space-x-2">
+                            ${isEditing ? 
+                                `<button class="text-red-500 hover:text-red-400" onclick="event.stopPropagation(); deleteFile('${file.id}')" title="Verwijder bestand">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>` 
+                                : ''}
+                            ${!isActiveFile && !isEditing ? 
+                                `<button class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-1 px-3 rounded-lg shadow-md ml-4"
+                                    onclick="event.stopPropagation(); setActiveFile('${file.id}', '${file.branches[0].id}')">
+                                    Maak Actief
+                                </button>` 
+                                : ''}
+                        </div>
+                    </div>
+                `;
+                historyContainer.appendChild(fileItem);
+
+                // 2. Branches Container (Ingesprongen en Inklapbaar per bestand)
+                const branchListContainer = document.createElement('ul');
+                branchListContainer.id = `branch-list-container-${file.id}`;
+                branchListContainer.className = isExpandedFile ? 'block divide-y divide-gray-700 pl-4' : 'hidden divide-y divide-gray-700 pl-4'; 
+                
+                file.branches.forEach((branch) => {
+                    const isActiveBranch = branch.id === activeBranchId && isActiveFile;
+                    const isExpandedBranch = branch.id === expandedBranchId;
+                    
+                    // Branch Titel
+                    const branchItem = document.createElement('li');
+                    // Lettergrootte: text-sm op branch titel
+                    branchItem.className = `py-2 mt-1 font-medium transition duration-150 rounded-md ${isActiveBranch ? 'bg-gray-600 border-l-4 border-yellow-500' : 'hover:bg-gray-700'}`;
+                    
+                    const branchTitle = branch.isMain 
+                        ? `<span class="text-yellow-400 text-sm">Main Branch</span>`
+                        : `<span class="text-gray-300 truncate text-sm">${branch.name}</span> <span class="text-xs text-gray-500">v${branch.baseMajor}.x</span>`;
+                    
+                    branchItem.innerHTML = `
+                        <div class="flex justify-between items-center text-white cursor-pointer p-2" onclick="window.toggleVersions('${branch.id}')">
+                            <div class="flex items-center space-x-2 truncate">
+                                ${!isEditing ? 
+                                    `<svg id="branch-caret-${branch.id}" class="w-3 h-3 transition-transform duration-200 ${isExpandedBranch ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`
+                                    : ''}
+                                ${branchTitle}
+                            </div>
+
+                            <div class="flex items-center space-x-2">
+                                ${isEditing ? 
+                                    `<button class="text-red-500 hover:text-red-400" onclick="event.stopPropagation(); deleteBranch('${file.id}', '${branch.id}')" title="Verwijder branch">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>` 
+                                    : ''}
+                                ${!isActiveBranch && !isEditing ? 
+                                    `<button class="text-xs bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-0.5 px-2 rounded-lg shadow-sm ml-4"
+                                            onclick="event.stopPropagation(); setActiveFile('${file.id}', '${branch.id}')">
+                                        Activeer
+                                    </button>` 
+                                    : ''}
+                            </div>
+                        </div>
+                    `;
+                    branchListContainer.appendChild(branchItem);
+
+                    // 3. Versies Container (Ingesprongen en Inklapbaar per branch)
+                    const versionListContainer = document.createElement('ul');
+                    versionListContainer.id = `version-list-container-${branch.id}`;
+                    versionListContainer.className = isExpandedBranch ? 'block divide-y divide-gray-700' : 'hidden divide-y divide-gray-700'; 
+                    
+                    if (branch.versions.length === 0) {
+                        versionListContainer.innerHTML = `<li class="pl-8 py-2 text-gray-500 text-xs">Geen versies in deze branch.</li>`;
+                    } else {
+                        branch.versions.forEach((v) => {
+                            const versionItem = document.createElement('li');
+                            // Dubbel inspringen: pl-8
+                            versionItem.className = 'pl-8 py-2 hover:bg-gray-700 transition duration-150 cursor-pointer';
+
+                            versionItem.innerHTML = `
+                                <!-- VERSIE NAAM EN TIJDSTIP OP ÉÉN REGEL -->
+                                <div class="flex justify-between items-center">
+                                    <!-- Lettergrootte: text-xs op versienaam -->
+                                    <p class="font-normal text-gray-200 truncate mr-2 text-xs">${v.name}</p>
+                                    <p class="text-xs text-gray-500 flex-shrink-0">${formatTimestamp(v.timestamp)}</p>
+                                </div>
+                                
+                                <div class="flex items-center justify-between mt-2">
+                                    <div class="flex items-center space-x-3">
+                                        <button class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-2 rounded-lg shadow-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}"
+                                                ${isEditing ? 'disabled' : ''}
+                                                onclick="switchVersionHandler('${file.id}', '${branch.id}', '${v.id}')">
+                                            Laad Versie
+                                        </button>
+                                        
+                                        <!-- Labels en Checkboxen -->
+                                        <div class="flex items-center" onclick="event.stopPropagation()">
+                                            <input type="checkbox" id="stable-${v.id}" class="h-4 w-4 rounded focus:ring-green-500 bg-gray-600 border-gray-600 checked:text-green-600 ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}"
+                                                ${v.isStable ? 'checked' : ''}
+                                                ${isEditing ? 'disabled' : ''}
+                                                onclick="toggleVersionLabel('${file.id}', '${branch.id}', '${v.id}', 'isStable')">
+                                            <label for="stable-${v.id}" class="ml-1 text-sm text-green-600 select-none font-medium ${isEditing ? 'opacity-50' : ''}">Stable</label>
+                                        </div>
+
+                                        <div class="flex items-center" onclick="event.stopPropagation()">
+                                            <input type="checkbox" id="test-${v.id}" class="h-4 w-4 rounded focus:ring-orange-500 bg-gray-600 border-gray-600 checked:text-orange-500 ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}"
+                                                ${v.isTest ? 'checked' : ''}
+                                                ${isEditing ? 'disabled' : ''}
+                                                onclick="toggleVersionLabel('${file.id}', '${branch.id}', '${v.id}', 'isTest')">
+                                            <label for="test-${v.id}" class="ml-1 text-sm text-orange-500 select-none font-medium ${isEditing ? 'opacity-50' : ''}">Test</label>
+                                        </div>
+                                    </div>
+                                    ${isEditing ? 
+                                        `<button class="text-red-500 hover:text-red-400" onclick="deleteVersion('${file.id}', '${branch.id}', '${v.id}')" title="Verwijder versie">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>` 
+                                        : ''}
+                                </div>
+                            `;
+                            versionListContainer.appendChild(versionItem);
+                        });
+                    }
+                    branchListContainer.appendChild(versionListContainer);
+                });
+                historyContainer.appendChild(branchListContainer);
+            });
+        }
+
+
+        // --- TOAST/MELDING FUNCTIE ---
+
+        /**
+         * Toont een tijdelijke melding.
+         */
+        function showToast(message, bgColor) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `fixed bottom-5 right-5 p-4 rounded-lg text-white shadow-xl transition-opacity duration-300 z-50 ${bgColor}`;
+            toast.style.opacity = '1';
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+            }, 3000);
+        }
+
+        // Initialiseer bij het laden van de pagina: Laad de opgeslagen versies.
+        document.addEventListener('DOMContentLoaded', () => {
+            loadActiveFile(); // Laadt de actieve file code EN rendert de geschiedenis
+            document.getElementById('storage-info').textContent = 'Opslag: Local Storage (Browser)';
+        });
+
+        // Bind de opslagfuncties aan de knoppen
+        window.saveNewFile = saveNewFile;
+        window.incrementVersion = saveBranchVersion; // Naam van de functie aangepast
+    </script>
+
+    <style>
+        /* Aangepaste scrollbar voor een donker thema */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #2d3748; /* dark gray */
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #4a5568; /* slightly lighter dark gray */
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #718096; /* light gray */
+        }
+
+        /* Styling voor de code-editor (textarea) */
+        #code-editor {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            caret-color: #48bb78; /* groen cursor */
+            white-space: pre;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+
+    <div class="flex flex-col md:flex-row h-screen">
+
+        <!-- Linkerpaneel: Code Editor -->
+        <main class="flex-1 flex flex-col p-4 bg-gray-800 shadow-lg md:overflow-y-auto">
+            <!-- Header met Titel, Status en Nieuwe Klembord Knop -->
+            <div class="flex justify-between items-center mb-4">
+                <h1 class="text-3xl font-bold text-green-400 flex items-baseline">
+                    Code-editor 
+                    <span id="editor-title-status" class="text-base font-normal ml-2 text-green-400"> (Geen actief bestand)</span>
+                </h1>
+                <!-- Klembord Knop -->
+                <button onclick="window.copyCodeToClipboard()" title="Kopieer inhoud naar klembord"
+                        class="p-2 text-gray-400 hover:text-green-400 bg-gray-700 hover:bg-gray-600 rounded-lg transition duration-150 focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <i class="fas fa-clipboard text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="flex-1 relative">
+                <textarea id="code-editor"
+                          placeholder="Typ of plak hier je code. Druk op 'Versie Ophogen' om een versiebeheer-moment vast te leggen."
+                          class="w-full h-full p-4 bg-gray-900 text-green-300 border border-gray-700 rounded-lg focus:ring-green-500 focus:border-green-500 resize-none outline-none transition duration-150"
+                          spellcheck="false">
+/*
+  Welkom bij je Code Versiebeheer App!
+  Dit is de plek waar je je code schrijft.
+  Sla een versie op om een momentopname te maken in de geschiedenis.
+*/
+function greet(name) {
+    console.log("Hallo, " + name + "!");
+}
+
+greet("Wereld");
+                </textarea>
+            </div>
+
+            <div class="mt-4 flex justify-between items-center">
+                <div class="flex space-x-4">
+                    <button id="new-file-button"
+                            onclick="window.saveNewFile()"
+                            class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-xl transform hover:scale-[1.02] transition duration-200 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50">
+                        Nieuwe Code Opslaan
+                    </button>
+                    
+                    <button id="increment-button"
+                            onclick="window.incrementVersion()"
+                            class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-xl transform hover:scale-[1.02] transition duration-200 focus:outline-none focus:ring-4 focus:ring-green-500 focus:ring-opacity-50">
+                        Versie Ophogen
+                    </button>
+
+                    <button id="new-branch-button"
+                            onclick="window.createNewBranch()"
+                            class="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-lg shadow-xl transform hover:scale-[1.02] transition duration-200 focus:outline-none focus:ring-4 focus:ring-yellow-500 focus:ring-opacity-50">
+                        Nieuwe Branch Maken
+                    </button>
+                </div>
+                
+                <!-- Export/Import Knoppen en Storage Info -->
+                <div class="flex items-center space-x-4">
+                    <button onclick="window.exportData()"
+                            class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg shadow-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                        Exporteer (JSON)
+                    </button>
+                    
+                    <input type="file" id="importFile" accept=".json" class="hidden">
+                    <button onclick="window.triggerImport()"
+                            class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg shadow-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                        Importeer (JSON)
+                    </button>
+
+                    <div id="storage-info" class="text-xs text-gray-400 truncate ml-4">Opslag: Initialiseren...</div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Rechterpaneel: Versiegeschiedenis -->
+        <aside class="w-full md:w-80 flex flex-col bg-gray-800 border-l border-gray-700">
+            <div class="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-700 sticky top-0 z-10">
+                <h2 class="text-xl font-bold text-yellow-400">
+                    History
+                </h2>
+                <button id="edit-mode-button"
+                        onclick="window.toggleEditMode()"
+                        class="text-xs bg-gray-600 hover:bg-gray-700 text-white font-medium py-0.5 px-2 rounded-lg shadow-md transition duration-200">
+                    Bewerk Modus (Uit)
+                </button>
+            </div>
+            
+            <ul id="version-history" class="overflow-y-auto flex-1 divide-y divide-gray-700">
+                <!-- Bestanden, Branches en hun versies worden hier dynamisch geladen -->
+                <p class="p-4 text-gray-400 text-sm">Bestanden worden geladen...</p>
+            </ul>
+        </aside>
+    </div>
+
+    <!-- Toast Melding -->
+    <div id="toast" style="opacity: 0;" class="fixed bottom-5 right-5 p-4 rounded-lg text-white shadow-xl transition-opacity duration-300 z-50 bg-gray-700">
+        Melding
+    </div>
+</body>
+</html>
