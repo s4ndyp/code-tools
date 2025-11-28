@@ -7,10 +7,9 @@ RUN rm -rf /usr/share/nginx/html/*
 # Kopieer de custom Nginx configuratie
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Kopieer de webapplicatie naar de container
-# Zorg dat je 'devtools_suite.html' hernoemt naar 'index.html' 
-# of pas de naam hieronder aan.
-COPY index.html /usr/share/nginx/html/index.html
+# Kopieer ALLE benodigde HTML-bestanden in één keer:
+# Dit omvat index.html, html_tester.html en code_diff.html
+COPY *.html /usr/share/nginx/html/
 
 # Expose poort 80 voor webverkeer
 EXPOSE 80
