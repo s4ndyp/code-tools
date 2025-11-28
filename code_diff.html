@@ -41,7 +41,7 @@
         }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 font-sans h-screen flex flex-col overflow-hidden">
+<body class="bg-slate-900 text-slate-100 font-sans h-screen flex flex-col">
 
     <header class="h-14 bg-slate-800 border-b border-slate-700 flex items-center justify-between px-4 sticky top-0 z-50 shadow-md">
         <div class="flex items-center gap-4">
@@ -64,7 +64,7 @@
         </div>
     </header>
 
-    <main class="flex-grow p-4 md:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6 overflow-hidden">
+    <main class="flex-grow p-4 md:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6">
         
         <!-- INPUT VIEW -->
         <div id="section-input" class="flex flex-col h-full gap-6">
@@ -81,7 +81,7 @@
                         </div>
                     </div>
                     <textarea id="diff-input-old" oninput="updateLineCounts()" class="flex-grow w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-300 code-font text-xs focus:outline-none focus:border-purple-500 resize-none" placeholder="Plak hier het originele bestand..."></textarea>
-                    <!-- NIEUW: Regelteller -->
+                    <!-- Regelteller -->
                     <span id="line-count-old" class="text-sm font-semibold text-center mt-1">Regels: 0</span>
                 </div>
                 
@@ -97,7 +97,7 @@
                         </div>
                     </div>
                     <textarea id="diff-input-new" oninput="updateLineCounts()" class="flex-grow w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-300 code-font text-xs focus:outline-none focus:border-purple-500 resize-none" placeholder="Plak hier het nieuwe bestand..."></textarea>
-                    <!-- NIEUW: Regelteller -->
+                    <!-- Regelteller -->
                     <span id="line-count-new" class="text-sm font-semibold text-center mt-1">Regels: 0</span>
                 </div>
             </div>
@@ -109,7 +109,8 @@
         </div>
 
         <!-- RESULT VIEW -->
-        <div id="section-result" class="hidden flex-col h-full overflow-y-auto pb-10">
+        <!-- Aangepast: h-full verwijderd, flex-1 toegevoegd voor juiste hoogteberekening -->
+        <div id="section-result" class="hidden flex-col flex-1 overflow-y-auto pb-10">
             <div id="diff-result-area" class="rounded-lg overflow-hidden border border-slate-700 shadow-xl"></div>
         </div>
 
@@ -127,7 +128,7 @@
                 const reader = new FileReader();
                 reader.onload = (e) => { 
                     document.getElementById(targetId).value = e.target.result;
-                    updateLineCounts(); // Update direct na upload
+                    updateLineCounts(); 
                 };
                 reader.readAsText(input.files[0]);
             }
@@ -184,17 +185,13 @@
             renderDiff(oldText, newText);
         }
         
-        // NIEUW: Functie om de regeltellers bij te werken
         function updateLineCounts() {
             const oldLines = oldInput.value.split('\n').length;
             const newLines = newInput.value.split('\n').length;
             
-            // Helper om Tailwind classes te resetten en toe te voegen
             const updateSpan = (el, count, colorClass) => {
                 el.textContent = `Regels: ${count}`;
-                // Verwijder alle mogelijke kleurklassen
-                el.classList.remove('text-green-400', 'text-red-400', 'text-blue-400');
-                // Voeg de juiste kleur toe
+                el.classList.remove('text-green-400', 'text-red-400', 'text-blue-400', 'text-slate-400');
                 el.classList.add(colorClass);
             };
 
@@ -205,17 +202,14 @@
                 updateSpan(oldLineCount, oldLines, 'text-red-400');
                 updateSpan(newLineCount, newLines, 'text-green-400');
             } else if (oldLines > 0) {
-                // Beide zijn gelijk en niet leeg
                 updateSpan(oldLineCount, oldLines, 'text-blue-400');
                 updateSpan(newLineCount, newLines, 'text-blue-400');
             } else {
-                // Beide zijn 0 (leeg)
                 updateSpan(oldLineCount, oldLines, 'text-slate-400');
                 updateSpan(newLineCount, newLines, 'text-slate-400');
             }
         }
         
-        // Initialiseer de tellers bij het laden
         document.addEventListener('DOMContentLoaded', updateLineCounts);
     </script>
 </body>
