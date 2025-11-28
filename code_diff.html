@@ -25,6 +25,20 @@
         .d2h-code-line-ctn { color: #cbd5e1; }
         .d2h-info { background-color: #1e293b !important; color: #94a3b8 !important; border-color: #334155 !important; }
         .code-font { font-family: 'Menlo', 'Monaco', 'Courier New', monospace; }
+
+        /* FIX VOOR REGELNUMMERS: Maakt de regelnummers sticky bovenaan de tabel */
+        .d2h-code-side-linenumber, .d2h-code-linenumber {
+            position: sticky;
+            top: 0; 
+            z-index: 10;
+        }
+        
+        /* Zorg dat de headers ook sticky zijn om het geheel kloppend te maken */
+        .d2h-file-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans h-screen flex flex-col overflow-hidden">
@@ -55,6 +69,7 @@
         <!-- INPUT VIEW -->
         <div id="section-input" class="flex flex-col h-full gap-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 h-[70vh]">
+                <!-- Origineel Veld -->
                 <div class="flex flex-col gap-2 h-full">
                     <div class="flex justify-between items-center px-1">
                         <label class="font-semibold text-red-400 text-sm flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500"></span> Origineel</label>
@@ -65,8 +80,12 @@
                             </label>
                         </div>
                     </div>
-                    <textarea id="diff-input-old" class="flex-grow w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-300 code-font text-xs focus:outline-none focus:border-purple-500 resize-none" placeholder="Plak hier het originele bestand..."></textarea>
+                    <textarea id="diff-input-old" oninput="updateLineCounts()" class="flex-grow w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-300 code-font text-xs focus:outline-none focus:border-purple-500 resize-none" placeholder="Plak hier het originele bestand..."></textarea>
+                    <!-- NIEUW: Regelteller -->
+                    <span id="line-count-old" class="text-sm font-semibold text-center mt-1">Regels: 0</span>
                 </div>
+                
+                <!-- Aangepast Veld -->
                 <div class="flex flex-col gap-2 h-full">
                     <div class="flex justify-between items-center px-1">
                         <label class="font-semibold text-green-400 text-sm flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span> Aangepast</label>
@@ -77,7 +96,9 @@
                             </label>
                         </div>
                     </div>
-                    <textarea id="diff-input-new" class="flex-grow w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-300 code-font text-xs focus:outline-none focus:border-purple-500 resize-none" placeholder="Plak hier het nieuwe bestand..."></textarea>
+                    <textarea id="diff-input-new" oninput="updateLineCounts()" class="flex-grow w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-300 code-font text-xs focus:outline-none focus:border-purple-500 resize-none" placeholder="Plak hier het nieuwe bestand..."></textarea>
+                    <!-- NIEUW: Regelteller -->
+                    <span id="line-count-new" class="text-sm font-semibold text-center mt-1">Regels: 0</span>
                 </div>
             </div>
             <div class="flex justify-center">
@@ -96,11 +117,18 @@
 
     <script>
         let currentDiffMode = 'side-by-side';
+        const oldInput = document.getElementById('diff-input-old');
+        const newInput = document.getElementById('diff-input-new');
+        const oldLineCount = document.getElementById('line-count-old');
+        const newLineCount = document.getElementById('line-count-new');
 
         function handleDiffUpload(input, targetId) {
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
-                reader.onload = (e) => { document.getElementById(targetId).value = e.target.result; };
+                reader.onload = (e) => { 
+                    document.getElementById(targetId).value = e.target.result;
+                    updateLineCounts(); // Update direct na upload
+                };
                 reader.readAsText(input.files[0]);
             }
         }
@@ -112,14 +140,14 @@
         }
 
         function generateDiff() {
-            const oldText = document.getElementById('diff-input-old').value;
-            const newText = document.getElementById('diff-input-new').value;
+            const oldText = oldInput.value;
+            const newText = newInput.value;
             if (!oldText && !newText) { alert("Vul beide velden in."); return; }
 
             document.getElementById('section-input').classList.add('hidden');
             document.getElementById('section-result').classList.remove('hidden');
             document.getElementById('result-controls').classList.remove('hidden');
-            document.getElementById('section-result').classList.add('flex'); // Ensure flex display
+            document.getElementById('section-result').classList.add('flex');
 
             renderDiff(oldText, newText);
         }
@@ -129,8 +157,13 @@
             const targetElement = document.getElementById('diff-result-area');
             const configuration = { drawFileList: false, matching: 'lines', outputFormat: currentDiffMode, colorScheme: 'dark' };
             const diff2htmlUi = new Diff2HtmlUI(targetElement, diffString, configuration);
+            
+            // Render de diff
             diff2htmlUi.draw();
             diff2htmlUi.highlightCode();
+            
+            // Scroll naar boven na het renderen van de resultaten
+            document.getElementById('section-result').scrollTo(0, 0);
         }
 
         function setDiffMode(mode) {
@@ -146,11 +179,44 @@
                 btnSide.className = 'px-3 py-1.5 rounded transition-colors text-slate-400 hover:bg-slate-700';
             }
             
-            // Re-render
-            const oldText = document.getElementById('diff-input-old').value;
-            const newText = document.getElementById('diff-input-new').value;
+            const oldText = oldInput.value;
+            const newText = newInput.value;
             renderDiff(oldText, newText);
         }
+        
+        // NIEUW: Functie om de regeltellers bij te werken
+        function updateLineCounts() {
+            const oldLines = oldInput.value.split('\n').length;
+            const newLines = newInput.value.split('\n').length;
+            
+            // Helper om Tailwind classes te resetten en toe te voegen
+            const updateSpan = (el, count, colorClass) => {
+                el.textContent = `Regels: ${count}`;
+                // Verwijder alle mogelijke kleurklassen
+                el.classList.remove('text-green-400', 'text-red-400', 'text-blue-400');
+                // Voeg de juiste kleur toe
+                el.classList.add(colorClass);
+            };
+
+            if (oldLines > newLines) {
+                updateSpan(oldLineCount, oldLines, 'text-green-400');
+                updateSpan(newLineCount, newLines, 'text-red-400');
+            } else if (newLines > oldLines) {
+                updateSpan(oldLineCount, oldLines, 'text-red-400');
+                updateSpan(newLineCount, newLines, 'text-green-400');
+            } else if (oldLines > 0) {
+                // Beide zijn gelijk en niet leeg
+                updateSpan(oldLineCount, oldLines, 'text-blue-400');
+                updateSpan(newLineCount, newLines, 'text-blue-400');
+            } else {
+                // Beide zijn 0 (leeg)
+                updateSpan(oldLineCount, oldLines, 'text-slate-400');
+                updateSpan(newLineCount, newLines, 'text-slate-400');
+            }
+        }
+        
+        // Initialiseer de tellers bij het laden
+        document.addEventListener('DOMContentLoaded', updateLineCounts);
     </script>
 </body>
 </html>
