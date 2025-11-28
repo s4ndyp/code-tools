@@ -74,7 +74,7 @@
                     <div class="flex justify-between items-center px-1">
                         <label class="font-semibold text-red-400 text-sm flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500"></span> Origineel</label>
                         
-                        <!-- NIEUWE KNOPPEN GROEP -->
+                        <!-- KNOPPEN GROEP -->
                         <div class="flex gap-1.5 text-xs">
                             <label class="cursor-pointer bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition flex items-center gap-1">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
@@ -101,7 +101,7 @@
                     <div class="flex justify-between items-center px-1">
                         <label class="font-semibold text-green-400 text-sm flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span> Aangepast</label>
                         
-                        <!-- NIEUWE KNOPPEN GROEP -->
+                        <!-- KNOPPEN GROEP -->
                         <div class="flex gap-1.5 text-xs">
                             <label class="cursor-pointer bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition flex items-center gap-1">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
@@ -162,42 +162,18 @@
             updateLineCounts();
         }
 
-        // Functie om te plakken vanaf het klembord (AANGEPAST VOOR IFRAME/PERMISSION FIX)
-        function pasteFromClipboard(targetId) {
+        // Functie om te plakken vanaf het klembord (Terug naar de moderne API)
+        async function pasteFromClipboard(targetId) {
             const textarea = document.getElementById(targetId);
-
-            // 1. Maak een tijdelijk invoerveld aan dat in focus kan komen
-            const tempArea = document.createElement('textarea');
-            tempArea.style.position = 'absolute';
-            tempArea.style.left = '-9999px';
-            tempArea.style.top = '0';
-            document.body.appendChild(tempArea);
-            
-            // 2. Focus het element zodat het de plak-actie kan ontvangen
-            tempArea.focus();
-
             try {
-                // 3. Voer de 'paste' opdracht uit
-                // Dit werkt alleen omdat het getriggerd wordt door een directe klik (user gesture).
-                if (document.execCommand('paste')) {
-                    const text = tempArea.value;
-                    if (text) {
-                        textarea.value = text;
-                        updateLineCounts();
-                    } else {
-                         // Dit kan gebeuren als de gebruiker de klembordtoegang weigert
-                        alert('Kon niet plakken via de knop. Probeer de code handmatig te plakken (Ctrl+V/Cmd+V).');
-                    }
-                } else {
-                    // Mislukt, misschien is de browser te restrictief of is er geen focus
-                    alert('De automatische plakfunctie is mislukt. Probeer de code handmatig te plakken (Ctrl+V/Cmd+V).');
-                }
+                // Gebruik de moderne, asynchrone API
+                const text = await navigator.clipboard.readText();
+                textarea.value = text;
+                updateLineCounts();
             } catch (err) {
-                console.error('Plakfout met execCommand:', err);
-                alert('Er is een fout opgetreden bij het plakken. Probeer de code handmatig te plakken (Ctrl+V/Cmd+V).');
-            } finally {
-                // 4. Verwijder het tijdelijke element
-                document.body.removeChild(tempArea);
+                // Afhandeling voor geweigerde of geblokkeerde klembordtoegang
+                console.error('Klembordtoegang mislukt:', err);
+                alert('Klembordtoegang is geweigerd (Permission Policy) of niet beschikbaar. Plak de code handmatig (Ctrl+V/Cmd+V).');
             }
         }
 
