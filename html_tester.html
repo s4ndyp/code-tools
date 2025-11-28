@@ -12,18 +12,21 @@
         }
     </script>
     <style>
+        /* Standaard scrollbar stijlen */
         ::-webkit-scrollbar { width: 10px; height: 10px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 5px; }
         .code-font { font-family: 'Menlo', 'Monaco', 'Courier New', monospace; }
         
-        /* Stijl voor de markering van de gevonden tekst */
-        .highlighted-text {
-            background-color: yellow; /* Oogstrelende gele highlight */
-            color: black; /* Zorg voor goed contrast */
-            border-radius: 2px;
-            padding: 1px 0;
-            display: inline-block;
+        /* Zorg dat de textarea de ruimte vult */
+        #code-input {
+            flex-1; 
+            width: 100%;
+        }
+        
+        /* Styling voor de textarea */
+        textarea::placeholder {
+            color: #475569; /* slate-600 */
         }
     </style>
 </head>
@@ -67,25 +70,27 @@
                         RUN
                     </button>
                 </div>
-                
+
                 <!-- Zoekbalk toegevoegd -->
-                <!-- De oninput handler is verwijderd om te voorkomen dat de focus verloren gaat tijdens het typen -->
                 <div class="flex gap-2 items-center">
-                    <input type="text" id="search-input" placeholder="Zoekterm..." class="w-full p-2 bg-slate-700 text-slate-200 rounded border border-slate-600 focus:outline-none focus:border-blue-500 text-sm">
-                    <button onclick="highlightText()" class="flex-shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-medium transition text-sm">
+                    <!-- Input is flex-1 om de resterende ruimte op te vullen -->
+                    <input type="text" id="search-input" placeholder="Zoekterm..." class="flex-1 p-2 bg-slate-700 text-slate-200 rounded border border-slate-600 focus:outline-none focus:border-blue-500 text-sm">
+                    <button onclick="startSearch()" class="flex-shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-medium transition text-sm">
                         Zoek
+                    </button>
+                    <!-- Nieuwe knop voor de volgende match, standaard uitgeschakeld -->
+                    <button id="next-match-btn" onclick="goToNextMatch()" class="flex-shrink-0 bg-blue-600 hover:bg-blue-500 text-white p-2 rounded font-medium transition text-sm disabled:opacity-50" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
                     </button>
                 </div>
                 
-                <!-- Tekstgebied voor code-invoer -->
-                <textarea id="code-input" class="flex-1 w-full bg-slate-800 text-slate-200 code-font text-sm p-4 rounded border border-slate-700 focus:outline-none focus:border-blue-500 resize-none shadow-inner" placeholder="<html>
-  <body>
-    <h1>Hallo Wereld!</h1>
-  </body>
-</html>"></textarea>
+                <!-- Terug naar de simpele, betrouwbare textarea -->
+                <textarea id="code-input" class="flex-1 w-full bg-slate-800 text-slate-200 code-font text-base p-4 rounded border border-slate-700 focus:outline-none focus:border-blue-500 resize-none shadow-inner" placeholder="Plaats hier uw volledige HTML-code."></textarea>
             </div>
             
-            <!-- Zijbalk Geschiedenis -->
+            <!-- Sidebar History -->
             <div class="w-72 bg-slate-800 border-l border-slate-700 flex flex-col hidden md:flex">
                 <div class="p-4 border-b border-slate-700 flex justify-between items-center">
                     <h2 class="font-bold text-slate-300 text-sm">Geschiedenis</h2>
@@ -95,7 +100,7 @@
             </div>
         </div>
 
-        <!-- Voorbeeldweergave (standaard verborgen) -->
+        <!-- Preview View (Hidden by default) -->
         <div id="preview-container" class="hidden w-full h-full bg-white">
             <iframe id="preview-frame" class="w-full h-full border-none"></iframe>
         </div>
@@ -108,13 +113,14 @@
         const previewFrame = document.getElementById('preview-frame');
         const btnBack = document.getElementById('btn-back');
         const historyListEl = document.getElementById('history-list');
-        const searchInput = document.getElementById('search-input'); 
-        let history = [];
+        const searchInput = document.getElementById('search-input');
+        const nextMatchBtn = document.getElementById('next-match-btn');
 
-        /**
-         * Schakelt tussen de editor- en de preview-modus.
-         * @param {string} mode - De te activeren modus ('editor' of 'preview').
-         */
+        let history = [];
+        let searchMatches = []; // Array van {start: number, end: number} objecten
+        let currentMatchIndex = -1;
+        let lastSearchTerm = '';
+
         function toggleMode(mode) {
             if (mode === 'preview') {
                 editorContainer.classList.add('hidden');
@@ -125,94 +131,109 @@
                 editorContainer.classList.remove('hidden');
                 btnBack.classList.add('hidden');
                 previewFrame.srcdoc = ''; 
+                codeInput.focus(); // Focus op de textarea
             }
         }
 
-        /**
-         * Haalt de code uit de editor, voegt deze toe aan de geschiedenis en start de preview.
-         */
         function runCode() {
             const code = codeInput.value;
             if (!code.trim()) { 
                 console.error("Voer eerst HTML in!"); 
                 return; 
             }
-            // Zorg ervoor dat de selectie wordt verwijderd voordat we de code uitvoeren
-            clearSelectionAndSearchTerm(true); 
             addToHistory(code);
             previewFrame.srcdoc = code;
             toggleMode('preview');
         }
 
-        /**
-         * Selecteer de eerste overeenkomst van de zoekterm in de textarea.
-         */
-        function highlightText() {
-            const searchTerm = searchInput.value.trim();
-            let content = codeInput.value;
-            
-            // Verwijder eerst eventuele eerdere selecties
-            clearSelectionAndSearchTerm(false);
-
-            if (searchTerm === '') {
-                // Als de zoekterm leeg is, focus dan gewoon op het zoekveld
-                searchInput.focus();
-                return;
-            }
-
-            // Zoek naar de eerste index van de term (case-insensitive)
-            const index = content.toLowerCase().indexOf(searchTerm.toLowerCase());
-            
-            if (index !== -1) {
-                // Selecteer de gevonden tekst in de textarea
-                codeInput.focus();
-                codeInput.setSelectionRange(index, index + searchTerm.length);
-                
-                // Scroll naar de selectie (optioneel, helpt bij lange documenten)
-                // codeInput.scrollTop = (index / content.length) * codeInput.scrollHeight;
-                
-            } else {
-                // Geen resultaten gevonden
-                searchInput.focus();
-                // Je zou hier een visuele feedback kunnen geven, bijvoorbeeld de rand rood maken.
-                console.log(`Zoekterm "${searchTerm}" niet gevonden.`);
-            }
-        }
-
-        /**
-         * Verwijdert de selectie in de textarea en wist eventueel de zoekbalk.
-         * @param {boolean} clearSearch - Indien waar, maak ook de zoekbalk leeg.
-         */
-        function clearSelectionAndSearchTerm(clearSearch = true) {
-            // Dit reset de selectie, waardoor de tekst niet meer gemarkeerd is
-            codeInput.setSelectionRange(0, 0); 
-            
-            if (clearSearch) {
-                searchInput.value = '';
-            }
-        }
-
-
-        // Oorspronkelijke functies
-        
         function handleFileUpload(input) {
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
                 reader.onload = (e) => { 
                     codeInput.value = e.target.result; 
-                    clearSelectionAndSearchTerm(); // Reset na upload
+                    // Reset zoektoestand na laden van nieuwe code
+                    resetSearch();
                 };
                 reader.readAsText(input.files[0]);
             }
         }
 
         function clearEditor() {
-            // Vervang confirm() door een custom modal/melding in een productieomgeving.
-            if(confirm('Editor leegmaken?')) {
-                codeInput.value = '';
-                clearSelectionAndSearchTerm(); // Reset na wissen
-            }
+            // Veranderd van console.error naar console.log om de melding te dempen
+            console.log('Editor is leeggemaakt.');
+            codeInput.value = '';
+            resetSearch(); // Reset zoektoestand
         }
+
+        // NIEUWE FUNCTIE: Reset de zoektoestand
+        function resetSearch() {
+            searchMatches = [];
+            currentMatchIndex = -1;
+            lastSearchTerm = '';
+            nextMatchBtn.disabled = true;
+            // Verwijder de selectie (niet strikt noodzakelijk maar goed voor opruimen)
+            codeInput.setSelectionRange(0, 0); 
+        }
+
+        // NIEUWE FUNCTIE: Start of vervolgt de zoekopdracht
+        function startSearch() {
+            const searchTerm = searchInput.value.trim();
+            const code = codeInput.value;
+
+            if (!searchTerm) {
+                resetSearch();
+                searchInput.focus();
+                return;
+            }
+
+            // Nieuwe zoekopdracht starten als de term is veranderd
+            if (searchTerm.toLowerCase() !== lastSearchTerm.toLowerCase()) {
+                lastSearchTerm = searchTerm;
+                searchMatches = [];
+                currentMatchIndex = -1;
+
+                // Zoek alle indices van de term (geval-ongevoelig)
+                let lastIndex = -1;
+                while ((lastIndex = code.toLowerCase().indexOf(searchTerm.toLowerCase(), lastIndex + 1)) !== -1) {
+                    searchMatches.push({
+                        start: lastIndex,
+                        end: lastIndex + searchTerm.length
+                    });
+                }
+                
+                if (searchMatches.length === 0) {
+                    console.log(`Zoekterm "${searchTerm}" niet gevonden.`);
+                    resetSearch();
+                    return;
+                }
+            }
+            
+            // Ga naar de volgende match (of de eerste, als we net begonnen zijn)
+            goToNextMatch();
+
+            // Schakel de 'Volgende' knop in als er meer dan één match is
+            nextMatchBtn.disabled = searchMatches.length <= 1;
+        }
+
+        // NIEUWE FUNCTIE: Gaat naar de volgende gevonden tekst
+        function goToNextMatch() {
+            if (searchMatches.length === 0) return;
+
+            // Ga naar de volgende index, of wrap terug naar de eerste
+            currentMatchIndex = (currentMatchIndex + 1) % searchMatches.length;
+            
+            const match = searchMatches[currentMatchIndex];
+            
+            // Selecteer de gevonden tekst in de textarea
+            codeInput.setSelectionRange(match.start, match.end);
+
+            // Scroll naar de selectie en focus op het element
+            codeInput.focus();
+
+            console.log(`Match ${currentMatchIndex + 1} van ${searchMatches.length} geselecteerd.`);
+        }
+
+        // --- Geschiedenis Functies ---
 
         function loadHistory() {
             const stored = localStorage.getItem('htmlTesterHistory');
@@ -234,12 +255,10 @@
         }
 
         function clearHistory() {
-            // Vervang confirm() door een custom modal/melding in een productieomgeving.
-            if(confirm('Geschiedenis wissen?')) {
-                history = [];
-                localStorage.setItem('htmlTesterHistory', JSON.stringify(history));
-                renderHistory();
-            }
+            history = [];
+            localStorage.setItem('htmlTesterHistory', JSON.stringify(history));
+            renderHistory();
+            console.log('Geschiedenis is gewist.');
         }
 
         function renderHistory() {
@@ -251,8 +270,7 @@
             history.forEach((item, index) => {
                 const div = document.createElement('div');
                 div.className = 'bg-slate-700 hover:bg-slate-600 p-2 rounded cursor-pointer border border-transparent hover:border-slate-500 transition';
-                // Laad de code in de editor en reset de highlight
-                div.onclick = () => { codeInput.value = history[index].code; clearSelectionAndSearchTerm(); };
+                div.onclick = () => { codeInput.value = history[index].code; resetSearch(); };
                 div.innerHTML = `<div class="flex justify-between items-center mb-1"><span class="text-xs font-bold text-blue-400">#${history.length - index}</span><span class="text-[10px] text-slate-400">${item.timestamp}</span></div><div class="text-xs text-slate-300 font-mono truncate">${item.preview}</div>`;
                 historyListEl.appendChild(div);
             });
