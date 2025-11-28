@@ -73,11 +73,22 @@
                 <div class="flex flex-col gap-2 h-full">
                     <div class="flex justify-between items-center px-1">
                         <label class="font-semibold text-red-400 text-sm flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500"></span> Origineel</label>
-                        <div class="relative">
-                            <label class="cursor-pointer text-xs bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition">
-                                📂 Upload
+                        
+                        <!-- NIEUWE KNOPPEN GROEP -->
+                        <div class="flex gap-1.5 text-xs">
+                            <label class="cursor-pointer bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                Upload
                                 <input type="file" class="hidden" onchange="handleDiffUpload(this, 'diff-input-old')">
                             </label>
+                            <button onclick="pasteFromClipboard('diff-input-old')" class="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                Plak
+                            </button>
+                            <button onclick="clearColumn('diff-input-old')" class="bg-slate-800 border border-slate-700 hover:bg-red-700 text-slate-300 hover:text-white px-2 py-1 rounded transition flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                Wis
+                            </button>
                         </div>
                     </div>
                     <textarea id="diff-input-old" oninput="updateLineCounts()" class="flex-grow w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-300 code-font text-xs focus:outline-none focus:border-purple-500 resize-none" placeholder="Plak hier het originele bestand..."></textarea>
@@ -89,11 +100,22 @@
                 <div class="flex flex-col gap-2 h-full">
                     <div class="flex justify-between items-center px-1">
                         <label class="font-semibold text-green-400 text-sm flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span> Aangepast</label>
-                        <div class="relative">
-                            <label class="cursor-pointer text-xs bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition">
-                                📂 Upload
+                        
+                        <!-- NIEUWE KNOPPEN GROEP -->
+                        <div class="flex gap-1.5 text-xs">
+                            <label class="cursor-pointer bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                Upload
                                 <input type="file" class="hidden" onchange="handleDiffUpload(this, 'diff-input-new')">
                             </label>
+                            <button onclick="pasteFromClipboard('diff-input-new')" class="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                Plak
+                            </button>
+                            <button onclick="clearColumn('diff-input-new')" class="bg-slate-800 border border-slate-700 hover:bg-red-700 text-slate-300 hover:text-white px-2 py-1 rounded transition flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                Wis
+                            </button>
                         </div>
                     </div>
                     <textarea id="diff-input-new" oninput="updateLineCounts()" class="flex-grow w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-300 code-font text-xs focus:outline-none focus:border-purple-500 resize-none" placeholder="Plak hier het nieuwe bestand..."></textarea>
@@ -109,7 +131,6 @@
         </div>
 
         <!-- RESULT VIEW -->
-        <!-- Aangepast: h-full verwijderd, flex-1 toegevoegd voor juiste hoogteberekening -->
         <div id="section-result" class="hidden flex-col flex-1 overflow-y-auto pb-10">
             <div id="diff-result-area" class="rounded-lg overflow-hidden border border-slate-700 shadow-xl"></div>
         </div>
@@ -131,6 +152,52 @@
                     updateLineCounts(); 
                 };
                 reader.readAsText(input.files[0]);
+            }
+        }
+
+        // Functie om de kolom te wissen
+        function clearColumn(targetId) {
+            const textarea = document.getElementById(targetId);
+            textarea.value = '';
+            updateLineCounts();
+        }
+
+        // Functie om te plakken vanaf het klembord (AANGEPAST VOOR IFRAME/PERMISSION FIX)
+        function pasteFromClipboard(targetId) {
+            const textarea = document.getElementById(targetId);
+
+            // 1. Maak een tijdelijk invoerveld aan dat in focus kan komen
+            const tempArea = document.createElement('textarea');
+            tempArea.style.position = 'absolute';
+            tempArea.style.left = '-9999px';
+            tempArea.style.top = '0';
+            document.body.appendChild(tempArea);
+            
+            // 2. Focus het element zodat het de plak-actie kan ontvangen
+            tempArea.focus();
+
+            try {
+                // 3. Voer de 'paste' opdracht uit
+                // Dit werkt alleen omdat het getriggerd wordt door een directe klik (user gesture).
+                if (document.execCommand('paste')) {
+                    const text = tempArea.value;
+                    if (text) {
+                        textarea.value = text;
+                        updateLineCounts();
+                    } else {
+                         // Dit kan gebeuren als de gebruiker de klembordtoegang weigert
+                        alert('Kon niet plakken via de knop. Probeer de code handmatig te plakken (Ctrl+V/Cmd+V).');
+                    }
+                } else {
+                    // Mislukt, misschien is de browser te restrictief of is er geen focus
+                    alert('De automatische plakfunctie is mislukt. Probeer de code handmatig te plakken (Ctrl+V/Cmd+V).');
+                }
+            } catch (err) {
+                console.error('Plakfout met execCommand:', err);
+                alert('Er is een fout opgetreden bij het plakken. Probeer de code handmatig te plakken (Ctrl+V/Cmd+V).');
+            } finally {
+                // 4. Verwijder het tijdelijke element
+                document.body.removeChild(tempArea);
             }
         }
 
@@ -186,8 +253,9 @@
         }
         
         function updateLineCounts() {
-            const oldLines = oldInput.value.split('\n').length;
-            const newLines = newInput.value.split('\n').length;
+            // Count lines, treating empty input as 0 lines
+            const oldLines = oldInput.value ? oldInput.value.split('\n').length : 0;
+            const newLines = newInput.value ? newInput.value.split('\n').length : 0;
             
             const updateSpan = (el, count, colorClass) => {
                 el.textContent = `Regels: ${count}`;
@@ -202,9 +270,11 @@
                 updateSpan(oldLineCount, oldLines, 'text-red-400');
                 updateSpan(newLineCount, newLines, 'text-green-400');
             } else if (oldLines > 0) {
+                // Beide zijn gelijk en niet leeg
                 updateSpan(oldLineCount, oldLines, 'text-blue-400');
                 updateSpan(newLineCount, newLines, 'text-blue-400');
             } else {
+                // Beide zijn 0 (leeg)
                 updateSpan(oldLineCount, oldLines, 'text-slate-400');
                 updateSpan(newLineCount, newLines, 'text-slate-400');
             }
