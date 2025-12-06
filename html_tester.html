@@ -18,28 +18,21 @@
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 5px; }
         .code-font { font-family: 'Menlo', 'Monaco', 'Courier New', monospace; }
         
-        /* Zorg dat de CodeMirror editor de ruimte vult */
-        /* CodeMirror 5 Stijlen */
-        .CodeMirror {
-            height: 100%; 
+        /* Ace Editor Stijlen */
+        #code-editor {
+            height: 100%; /* Ace Editor vult de flex-1 parent */
             width: 100%;
             border: 1px solid #334155; 
             border-radius: 0.25rem; 
             font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
             font-size: 16px;
-            background-color: #1e293b; 
             box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.1); 
         }
-        
-        /* CodeMirror focus stijl */
-        .CodeMirror-focused {
-            border-color: #3b82f6 !important; 
-            outline: none;
-        }
 
-        /* Stijl voor de scrollbar van de editor (als deze niet via webkit-scrollbar gaat) */
-        .CodeMirror-vscrollbar, .CodeMirror-hscrollbar {
-            background-color: #0f172a;
+        /* Zorg dat Ace's interne elementen de dark-mode achtergrond behouden */
+        .ace_editor {
+            background-color: #1e293b !important;
+            border-radius: 0.25rem; 
         }
 
         /* Visuele feedback voor favorieten */
@@ -52,20 +45,15 @@
         }
     </style>
     
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
-
+    <!-- Ace Editor Bibliotheek import -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-dracula.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-html.min.js"></script>
+    
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans h-screen flex flex-col overflow-hidden">
 
+    <!-- Header met Home link -->
     <header class="h-14 bg-slate-800 border-b border-slate-700 flex items-center justify-between px-4 shadow-md z-20">
         <div class="flex items-center gap-4">
             <a href="index.html" class="text-slate-400 hover:text-white flex items-center gap-1 text-sm font-medium transition">
@@ -86,10 +74,13 @@
 
     <main class="flex flex-1 relative overflow-hidden">
         
+        <!-- Editor View -->
         <div id="editor-container" class="flex w-full h-full">
-            <div class="flex-1 flex flex-col p-4 gap-4 h-full relative">
+            <!-- Flexbox container met min-h-0 om hoogte correct door te geven -->
+            <div class="flex-1 flex flex-col p-4 h-full relative min-h-0"> 
                 
-                <div class="flex justify-between items-center bg-slate-800 p-2 rounded border border-slate-700">
+                <!-- Knoppen en acties. mb-4 voor afstand -->
+                <div class="flex justify-between items-center bg-slate-800 p-2 rounded border border-slate-700 mb-4">
                     <div class="flex gap-2">
                         <label class="cursor-pointer bg-slate-700 hover:bg-slate-600 text-xs sm:text-sm px-3 py-2 rounded flex items-center gap-2 transition text-slate-300 hover:text-white">
                             <span>Upload</span>
@@ -103,7 +94,8 @@
                     </button>
                 </div>
 
-                <div class="flex gap-2 items-center">
+                <!-- Zoekbalk toegevoegd. mb-4 voor afstand -->
+                <div class="flex gap-2 items-center mb-4">
                     <input type="text" id="search-input" placeholder="Zoekterm..." class="flex-1 p-2 bg-slate-700 text-slate-200 rounded border border-slate-600 focus:outline-none focus:border-blue-500 text-sm">
                     <button onclick="startSearch()" class="flex-shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-medium transition text-sm">
                         Zoek
@@ -115,12 +107,13 @@
                     </button>
                 </div>
                 
-                <textarea id="code-textarea" placeholder="Plaats hier uw volledige HTML-code." class="hidden">
-                    </textarea>
-                <div id="code-editor-wrapper" class="flex-1 w-full relative">
-                    </div>
+                <!-- De Ace Editor Container -->
+                <div id="code-editor-wrapper" class="flex-1 w-full relative flex"> 
+                    <div id="code-editor"></div>
+                </div>
             </div>
             
+            <!-- Sidebar History -->
             <div class="w-72 bg-slate-800 border-l border-slate-700 flex flex-col hidden md:flex">
                 <div class="p-4 border-b border-slate-700 flex justify-between items-center">
                     <h2 class="font-bold text-slate-300 text-sm">Geschiedenis</h2>
@@ -130,6 +123,7 @@
             </div>
         </div>
 
+        <!-- Preview View (Hidden by default) -->
         <div id="preview-container" class="hidden w-full h-full bg-white">
             <iframe id="preview-frame" class="w-full h-full border-none"></iframe>
         </div>
@@ -143,77 +137,64 @@
         const historyListEl = document.getElementById('history-list');
         const searchInput = document.getElementById('search-input');
         const nextMatchBtn = document.getElementById('next-match-btn');
-        const codeTextArea = document.getElementById('code-textarea'); 
-        const lineCountEl = document.getElementById('line-count'); // NIEUW ELEMENT
+        const lineCountEl = document.getElementById('line-count'); 
 
         let history = [];
-        let searchMatches = [];
-        let currentMatchIndex = -1;
-        let lastSearchTerm = '';
-        let cmEditor; 
-
+        let aceEditor; // De Ace Editor instantie
+        let lastSearchTerm = ''; // Houd de laatst gezochte term bij
+        
+        // WIJZIGING: Start met een lege string
+        const initialCode = ''; 
+        
         // Functie om het aantal regels in de UI te updaten
         function updateLineCount() {
-            if (cmEditor) {
-                const count = cmEditor.lineCount();
+            if (aceEditor) {
+                // Ace geeft de regeltelling via session.getLength()
+                const count = aceEditor.session.getLength();
                 lineCountEl.textContent = `Regels: ${count}`;
             }
         }
 
-        // --- CodeMirror 5 Initialisatie ---
-        function initializeCodeMirror() {
-            cmEditor = CodeMirror.fromTextArea(codeTextArea, {
-                mode: 'htmlmixed',
-                theme: 'dracula', 
-                lineNumbers: true, 
-                lineWrapping: true, 
-                styleActiveLine: true, 
-                autofocus: true,
-                viewportMargin: Infinity 
-            });
-
-            const cmElement = cmEditor.getWrapperElement();
-            cmElement.classList.add('flex-1'); 
-            document.getElementById('code-editor-wrapper').appendChild(cmElement);
+        // --- Ace Editor Initialisatie ---
+        function initializeAceEditor() {
+            aceEditor = ace.edit("code-editor");
             
-            cmEditor.focus();
-            updateLineCount(); // Eerste telling
+            // Set initial options
+            aceEditor.setTheme("ace/theme/dracula");
+            aceEditor.session.setMode("ace/mode/html");
+            aceEditor.setValue(initialCode, -1); // Stel de lege code in
+            
+            // Ace is standaard responsive, maar forceren van de herberekening is veilig
+            aceEditor.resize();
+            
+            // Luister naar veranderingen in de Ace Editor
+            aceEditor.session.on('change', updateLineCount);
 
-            // Luister naar veranderingen in de CodeMirror editor
-            cmEditor.on('change', updateLineCount);
+            updateLineCount(); 
         }
         
-        window.addEventListener('DOMContentLoaded', initializeCodeMirror);
+        window.addEventListener('DOMContentLoaded', initializeAceEditor);
 
-        // CodeMirror Abstraction
+        // Ace Editor Abstraction (vereenvoudigd)
         const codeInput = {
-            getValue: () => cmEditor ? cmEditor.getValue() : codeTextArea.value,
+            getValue: () => aceEditor ? aceEditor.getValue() : initialCode,
             setValue: (value) => {
-                if (cmEditor) {
-                    cmEditor.setValue(value);
-                    updateLineCount(); // Update de telling na het instellen van een nieuwe waarde
-                } else {
-                    codeTextArea.value = value;
+                if (aceEditor) {
+                    // -1 zorgt ervoor dat de cursor naar de start gaat
+                    aceEditor.setValue(value, -1);
+                    updateLineCount(); 
                 }
             },
-            focus: () => cmEditor ? cmEditor.focus() : codeTextArea.focus(),
-            setSelectionRange: (start, end) => {
-                if (cmEditor) {
-                    const from = cmEditor.posFromIndex(start);
-                    const to = cmEditor.posFromIndex(end);
-                    cmEditor.setSelection(from, to);
-                }
-            },
-            scrollIntoView: (start, end) => {
-                if (cmEditor) {
-                    const from = cmEditor.posFromIndex(start);
-                    const to = cmEditor.posFromIndex(end);
-                    cmEditor.scrollIntoView({ from: from, to: to });
-                }
-            },
-            getLineCount: () => cmEditor ? cmEditor.lineCount() : 0 // NIEUWE HULPFUNCTIE
+            focus: () => aceEditor && aceEditor.focus(),
+            // Ace's search en find methoden vervangen de custom setSelectionRange
+            resetSearch: () => {
+                lastSearchTerm = '';
+                nextMatchBtn.disabled = true;
+                // Verwijder eventuele Ace search-highlights
+                aceEditor.session.highlight(aceEditor.session.getMode());
+            }
         };
-        // --- Einde CodeMirror Initialisatie ---
+        // --- Einde Ace Editor Abstraction ---
 
 
         function toggleMode(mode) {
@@ -232,8 +213,9 @@
 
         function runCode() {
             const code = codeInput.getValue(); 
+            // Controleren op lege code
             if (!code.trim()) { 
-                console.error("Voer eerst HTML in!"); 
+                console.error("Voer eerst geldige HTML in!"); 
                 return; 
             }
             addToHistory(code);
@@ -246,7 +228,7 @@
                 const reader = new FileReader();
                 reader.onload = (e) => { 
                     codeInput.setValue(e.target.result); 
-                    resetSearch();
+                    codeInput.resetSearch();
                 };
                 reader.readAsText(input.files[0]);
             }
@@ -255,70 +237,80 @@
         function clearEditor() {
             console.log('Editor is leeggemaakt.');
             codeInput.setValue(''); 
-            resetSearch(); 
+            codeInput.resetSearch(); 
         }
 
-        // NIEUWE FUNCTIE: Reset de zoektoestand
-        function resetSearch() {
-            searchMatches = [];
-            currentMatchIndex = -1;
-            lastSearchTerm = '';
-            nextMatchBtn.disabled = true;
-            codeInput.setSelectionRange(0, 0); 
-        }
-
-        // AANGEPASTE FUNCTIE: Start of vervolgt de zoekopdracht met CodeMirror 5 API
+        // AANGEPASTE ZOEKFUNCTIES VOOR ACE
         function startSearch() {
-            if (!cmEditor) return;
+            if (!aceEditor) return;
             const searchTerm = searchInput.value;
-            const code = codeInput.getValue();
 
             if (!searchTerm) {
-                resetSearch();
+                codeInput.resetSearch();
                 searchInput.focus();
                 return;
             }
 
-            if (searchTerm.toLowerCase() !== lastSearchTerm.toLowerCase()) {
+            // Nieuwe zoekopdracht starten als de term is veranderd
+            if (searchTerm !== lastSearchTerm) {
                 lastSearchTerm = searchTerm;
-                searchMatches = [];
-                currentMatchIndex = -1;
-
-                let cursor = cmEditor.getSearchCursor(searchTerm, { line: 0, ch: 0 }, false); 
-                while (cursor.findNext()) {
-                    const fromIndex = cmEditor.indexFromPos(cursor.from());
-                    const toIndex = cmEditor.indexFromPos(cursor.to());
-                    searchMatches.push({ start: fromIndex, end: toIndex });
-                }
-
-                if (searchMatches.length === 0) {
-                    console.log(`Zoekterm "${searchTerm}" niet gevonden.`);
-                    resetSearch();
-                    return;
-                }
+                
+                // Configureer en start Ace's zoekfunctionaliteit
+                aceEditor.find(searchTerm, {
+                    regExp: false,
+                    caseSensitive: false,
+                    wrap: true, // Wrap rond de document
+                    wholeWord: false,
+                    skipCurrent: false // Start zoeken vanaf de huidige positie
+                });
+            } else {
+                // Als de term hetzelfde is, ga direct naar de volgende match
+                goToNextMatch();
+                return;
             }
-            
-            goToNextMatch();
 
-            nextMatchBtn.disabled = searchMatches.length <= 1;
+            // Ace heeft geen directe methode voor het tellen van alle matches zonder
+            // een extra loop. We gebruiken Ace's `find` herhaaldelijk en controleren de
+            // terugkeerwaarde om te zien of de eerste match gevonden is.
+            const initialFind = aceEditor.find(searchTerm, {
+                regExp: false,
+                caseSensitive: false,
+                wrap: false,
+                wholeWord: false,
+                skipCurrent: false
+            });
+
+            if (initialFind) {
+                nextMatchBtn.disabled = false;
+                // Zoek de eerste match opnieuw en focus
+                aceEditor.find(searchTerm, {
+                    regExp: false,
+                    caseSensitive: false,
+                    wrap: true, 
+                    wholeWord: false,
+                    skipCurrent: true // Ga naar de volgende, omdat Ace na de vorige find nog op dezelfde plek staat
+                });
+            } else {
+                 console.log(`Zoekterm "${searchTerm}" niet gevonden.`);
+                 codeInput.resetSearch();
+            }
         }
 
-        // AANGEPASTE FUNCTIE: Gaat naar de volgende gevonden tekst met CodeMirror 5 API
         function goToNextMatch() {
-            if (searchMatches.length === 0) return;
-
-            currentMatchIndex = (currentMatchIndex + 1) % searchMatches.length;
+            if (!aceEditor || !lastSearchTerm) return;
             
-            const match = searchMatches[currentMatchIndex];
-            
-            codeInput.setSelectionRange(match.start, match.end);
-            codeInput.scrollIntoView(match.start, match.end); 
+            // Gebruik Ace's ingebouwde findNext methode
+            aceEditor.findNext({
+                regExp: false,
+                caseSensitive: false,
+                wrap: true,
+                wholeWord: false
+            });
 
-            codeInput.focus();
-            console.log(`Match ${currentMatchIndex + 1} van ${searchMatches.length} geselecteerd.`);
+            aceEditor.focus();
         }
 
-        // --- Geschiedenis Functies (AANGEPAST) ---
+        // --- Geschiedenis Functies (aangepast voor Ace's regeltelling) ---
 
         function saveHistory() {
             localStorage.setItem('htmlTesterHistory', JSON.stringify(history));
@@ -330,14 +322,14 @@
                 history = JSON.parse(stored).map(item => ({
                     ...item,
                     isFavorite: item.isFavorite || false,
-                    lineCount: item.lineCount || 0 // Zorg dat lineCount bestaat
+                    lineCount: item.lineCount || 0 
                 }));
             }
             renderHistory();
         }
 
         function getLineCountOfCode(code) {
-             // Telt het aantal \n karakters + 1 (voor de laatste regel)
+            // Telt het aantal regels in de platte tekst
             return (code.match(/\n/g) || []).length + (code.trim() !== '' ? 1 : 0);
         }
 
@@ -349,7 +341,7 @@
                 timestamp: new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
                 preview: code.replace(/<[^>]*>?/gm, '').substring(0, 30) || "Code snippet",
                 isFavorite: false,
-                lineCount: getLineCountOfCode(code) // NIEUWE WAARDE: Aantal regels
+                lineCount: getLineCountOfCode(code) 
             };
 
             history.unshift(newItem);
@@ -386,7 +378,6 @@
             renderHistory(); 
         }
 
-        // AANGEPAST om lineCount in de weergave op te nemen
         function renderHistory() {
             historyListEl.innerHTML = '';
             if (history.length === 0) {
@@ -400,14 +391,15 @@
 
                 div.className = `bg-slate-700 hover:bg-slate-600 p-2 rounded cursor-pointer transition relative ${favoriteClass}`;
                 
-                div.onclick = () => { codeInput.setValue(item.code); resetSearch(); }; 
+                div.onclick = () => { codeInput.setValue(item.code); codeInput.resetSearch(); }; 
                 
                 div.innerHTML = `
                     <div class="flex justify-between items-center mb-1">
                         <span class="text-xs font-bold ${item.isFavorite ? 'text-amber-400' : 'text-blue-400'}">#${history.length - index}</span>
                         <div class="flex items-center gap-2">
                             <span class="text-[10px] text-slate-400">${item.timestamp}</span>
-                            <span class="text-[10px] text-slate-400 font-mono">Lijnen: ${item.lineCount}</span> <button 
+                            <span class="text-[10px] text-slate-400 font-mono">Lijnen: ${item.lineCount}</span> 
+                            <button 
                                 class="favorite-btn ${item.isFavorite ? 'is-favorite' : 'text-slate-500 hover:text-amber-500'}"
                                 onclick="toggleFavorite(${index}, event)"
                                 title="${item.isFavorite ? 'Favoriet uitschakelen' : 'Toevoegen aan favorieten'}"
