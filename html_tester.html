@@ -18,30 +18,54 @@
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 5px; }
         .code-font { font-family: 'Menlo', 'Monaco', 'Courier New', monospace; }
         
-        /* Zorg dat de textarea de ruimte vult */
-        #code-input {
-            flex-1; 
+        /* Zorg dat de CodeMirror editor de ruimte vult */
+        /* CodeMirror 5 Stijlen */
+        .CodeMirror {
+            height: 100%; 
             width: 100%;
+            border: 1px solid #334155; 
+            border-radius: 0.25rem; 
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            font-size: 16px;
+            background-color: #1e293b; 
+            box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.1); 
         }
         
-        /* Styling voor de textarea */
-        textarea::placeholder {
-            color: #475569; /* slate-600 */
+        /* CodeMirror focus stijl */
+        .CodeMirror-focused {
+            border-color: #3b82f6 !important; 
+            outline: none;
         }
-        
+
+        /* Stijl voor de scrollbar van de editor (als deze niet via webkit-scrollbar gaat) */
+        .CodeMirror-vscrollbar, .CodeMirror-hscrollbar {
+            background-color: #0f172a;
+        }
+
         /* Visuele feedback voor favorieten */
         .favorite-btn:hover {
-            color: #f59e0b; /* amber-500 */
+            color: #f59e0b; 
         }
         .is-favorite svg {
-            fill: #f59e0b; /* amber-500 */
+            fill: #f59e0b; 
             stroke: #f59e0b;
         }
     </style>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
+
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans h-screen flex flex-col overflow-hidden">
 
-    <!-- Header met Home link -->
     <header class="h-14 bg-slate-800 border-b border-slate-700 flex items-center justify-between px-4 shadow-md z-20">
         <div class="flex items-center gap-4">
             <a href="index.html" class="text-slate-400 hover:text-white flex items-center gap-1 text-sm font-medium transition">
@@ -62,11 +86,9 @@
 
     <main class="flex flex-1 relative overflow-hidden">
         
-        <!-- Editor View -->
         <div id="editor-container" class="flex w-full h-full">
             <div class="flex-1 flex flex-col p-4 gap-4 h-full relative">
                 
-                <!-- Knoppen en acties -->
                 <div class="flex justify-between items-center bg-slate-800 p-2 rounded border border-slate-700">
                     <div class="flex gap-2">
                         <label class="cursor-pointer bg-slate-700 hover:bg-slate-600 text-xs sm:text-sm px-3 py-2 rounded flex items-center gap-2 transition text-slate-300 hover:text-white">
@@ -74,20 +96,18 @@
                             <input type="file" accept=".html,.htm,.txt" class="hidden" onchange="handleFileUpload(this)">
                         </label>
                         <button onclick="clearEditor()" class="text-slate-400 hover:text-red-400 text-xs sm:text-sm px-3 py-2 transition">Wissen</button>
+                        <span id="line-count" class="text-sm text-slate-400 flex items-center pl-2">Regels: 0</span>
                     </div>
                     <button onclick="runCode()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-1.5 rounded font-bold shadow-lg shadow-blue-900/50 flex items-center gap-2 transition transform hover:scale-105 text-sm">
                         RUN
                     </button>
                 </div>
 
-                <!-- Zoekbalk toegevoegd -->
                 <div class="flex gap-2 items-center">
-                    <!-- Input is flex-1 om de resterende ruimte op te vullen -->
                     <input type="text" id="search-input" placeholder="Zoekterm..." class="flex-1 p-2 bg-slate-700 text-slate-200 rounded border border-slate-600 focus:outline-none focus:border-blue-500 text-sm">
                     <button onclick="startSearch()" class="flex-shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-medium transition text-sm">
                         Zoek
                     </button>
-                    <!-- Nieuwe knop voor de volgende match, standaard uitgeschakeld -->
                     <button id="next-match-btn" onclick="goToNextMatch()" class="flex-shrink-0 bg-blue-600 hover:bg-blue-500 text-white p-2 rounded font-medium transition text-sm disabled:opacity-50" disabled>
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -95,11 +115,12 @@
                     </button>
                 </div>
                 
-                <!-- Terug naar de simpele, betrouwbare textarea -->
-                <textarea id="code-input" class="flex-1 w-full bg-slate-800 text-slate-200 code-font text-base p-4 rounded border border-slate-700 focus:outline-none focus:border-blue-500 resize-none shadow-inner" placeholder="Plaats hier uw volledige HTML-code."></textarea>
+                <textarea id="code-textarea" placeholder="Plaats hier uw volledige HTML-code." class="hidden">
+                    </textarea>
+                <div id="code-editor-wrapper" class="flex-1 w-full relative">
+                    </div>
             </div>
             
-            <!-- Sidebar History -->
             <div class="w-72 bg-slate-800 border-l border-slate-700 flex flex-col hidden md:flex">
                 <div class="p-4 border-b border-slate-700 flex justify-between items-center">
                     <h2 class="font-bold text-slate-300 text-sm">Geschiedenis</h2>
@@ -109,14 +130,12 @@
             </div>
         </div>
 
-        <!-- Preview View (Hidden by default) -->
         <div id="preview-container" class="hidden w-full h-full bg-white">
             <iframe id="preview-frame" class="w-full h-full border-none"></iframe>
         </div>
     </main>
 
     <script>
-        const codeInput = document.getElementById('code-input');
         const editorContainer = document.getElementById('editor-container');
         const previewContainer = document.getElementById('preview-container');
         const previewFrame = document.getElementById('preview-frame');
@@ -124,11 +143,78 @@
         const historyListEl = document.getElementById('history-list');
         const searchInput = document.getElementById('search-input');
         const nextMatchBtn = document.getElementById('next-match-btn');
+        const codeTextArea = document.getElementById('code-textarea'); 
+        const lineCountEl = document.getElementById('line-count'); // NIEUW ELEMENT
 
         let history = [];
-        let searchMatches = []; // Array van {start: number, end: number} objecten
+        let searchMatches = [];
         let currentMatchIndex = -1;
         let lastSearchTerm = '';
+        let cmEditor; 
+
+        // Functie om het aantal regels in de UI te updaten
+        function updateLineCount() {
+            if (cmEditor) {
+                const count = cmEditor.lineCount();
+                lineCountEl.textContent = `Regels: ${count}`;
+            }
+        }
+
+        // --- CodeMirror 5 Initialisatie ---
+        function initializeCodeMirror() {
+            cmEditor = CodeMirror.fromTextArea(codeTextArea, {
+                mode: 'htmlmixed',
+                theme: 'dracula', 
+                lineNumbers: true, 
+                lineWrapping: true, 
+                styleActiveLine: true, 
+                autofocus: true,
+                viewportMargin: Infinity 
+            });
+
+            const cmElement = cmEditor.getWrapperElement();
+            cmElement.classList.add('flex-1'); 
+            document.getElementById('code-editor-wrapper').appendChild(cmElement);
+            
+            cmEditor.focus();
+            updateLineCount(); // Eerste telling
+
+            // Luister naar veranderingen in de CodeMirror editor
+            cmEditor.on('change', updateLineCount);
+        }
+        
+        window.addEventListener('DOMContentLoaded', initializeCodeMirror);
+
+        // CodeMirror Abstraction
+        const codeInput = {
+            getValue: () => cmEditor ? cmEditor.getValue() : codeTextArea.value,
+            setValue: (value) => {
+                if (cmEditor) {
+                    cmEditor.setValue(value);
+                    updateLineCount(); // Update de telling na het instellen van een nieuwe waarde
+                } else {
+                    codeTextArea.value = value;
+                }
+            },
+            focus: () => cmEditor ? cmEditor.focus() : codeTextArea.focus(),
+            setSelectionRange: (start, end) => {
+                if (cmEditor) {
+                    const from = cmEditor.posFromIndex(start);
+                    const to = cmEditor.posFromIndex(end);
+                    cmEditor.setSelection(from, to);
+                }
+            },
+            scrollIntoView: (start, end) => {
+                if (cmEditor) {
+                    const from = cmEditor.posFromIndex(start);
+                    const to = cmEditor.posFromIndex(end);
+                    cmEditor.scrollIntoView({ from: from, to: to });
+                }
+            },
+            getLineCount: () => cmEditor ? cmEditor.lineCount() : 0 // NIEUWE HULPFUNCTIE
+        };
+        // --- Einde CodeMirror Initialisatie ---
+
 
         function toggleMode(mode) {
             if (mode === 'preview') {
@@ -140,12 +226,12 @@
                 editorContainer.classList.remove('hidden');
                 btnBack.classList.add('hidden');
                 previewFrame.srcdoc = ''; 
-                codeInput.focus(); // Focus op de textarea
+                codeInput.focus(); 
             }
         }
 
         function runCode() {
-            const code = codeInput.value;
+            const code = codeInput.getValue(); 
             if (!code.trim()) { 
                 console.error("Voer eerst HTML in!"); 
                 return; 
@@ -159,8 +245,7 @@
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
                 reader.onload = (e) => { 
-                    codeInput.value = e.target.result; 
-                    // Reset zoektoestand na laden van nieuwe code
+                    codeInput.setValue(e.target.result); 
                     resetSearch();
                 };
                 reader.readAsText(input.files[0]);
@@ -168,10 +253,9 @@
         }
 
         function clearEditor() {
-            // Veranderd van console.error naar console.log om de melding te dempen
             console.log('Editor is leeggemaakt.');
-            codeInput.value = '';
-            resetSearch(); // Reset zoektoestand
+            codeInput.setValue(''); 
+            resetSearch(); 
         }
 
         // NIEUWE FUNCTIE: Reset de zoektoestand
@@ -180,14 +264,14 @@
             currentMatchIndex = -1;
             lastSearchTerm = '';
             nextMatchBtn.disabled = true;
-            // Verwijder de selectie (niet strikt noodzakelijk maar goed voor opruimen)
             codeInput.setSelectionRange(0, 0); 
         }
 
-        // NIEUWE FUNCTIE: Start of vervolgt de zoekopdracht
+        // AANGEPASTE FUNCTIE: Start of vervolgt de zoekopdracht met CodeMirror 5 API
         function startSearch() {
-            const searchTerm = searchInput.value.trim();
-            const code = codeInput.value;
+            if (!cmEditor) return;
+            const searchTerm = searchInput.value;
+            const code = codeInput.getValue();
 
             if (!searchTerm) {
                 resetSearch();
@@ -195,21 +279,18 @@
                 return;
             }
 
-            // Nieuwe zoekopdracht starten als de term is veranderd
             if (searchTerm.toLowerCase() !== lastSearchTerm.toLowerCase()) {
                 lastSearchTerm = searchTerm;
                 searchMatches = [];
                 currentMatchIndex = -1;
 
-                // Zoek alle indices van de term (geval-ongevoelig)
-                let lastIndex = -1;
-                while ((lastIndex = code.toLowerCase().indexOf(searchTerm.toLowerCase(), lastIndex + 1)) !== -1) {
-                    searchMatches.push({
-                        start: lastIndex,
-                        end: lastIndex + searchTerm.length
-                    });
+                let cursor = cmEditor.getSearchCursor(searchTerm, { line: 0, ch: 0 }, false); 
+                while (cursor.findNext()) {
+                    const fromIndex = cmEditor.indexFromPos(cursor.from());
+                    const toIndex = cmEditor.indexFromPos(cursor.to());
+                    searchMatches.push({ start: fromIndex, end: toIndex });
                 }
-                
+
                 if (searchMatches.length === 0) {
                     console.log(`Zoekterm "${searchTerm}" niet gevonden.`);
                     resetSearch();
@@ -217,32 +298,27 @@
                 }
             }
             
-            // Ga naar de volgende match (of de eerste, als we net begonnen zijn)
             goToNextMatch();
 
-            // Schakel de 'Volgende' knop in als er meer dan één match is
             nextMatchBtn.disabled = searchMatches.length <= 1;
         }
 
-        // NIEUWE FUNCTIE: Gaat naar de volgende gevonden tekst
+        // AANGEPASTE FUNCTIE: Gaat naar de volgende gevonden tekst met CodeMirror 5 API
         function goToNextMatch() {
             if (searchMatches.length === 0) return;
 
-            // Ga naar de volgende index, of wrap terug naar de eerste
             currentMatchIndex = (currentMatchIndex + 1) % searchMatches.length;
             
             const match = searchMatches[currentMatchIndex];
             
-            // Selecteer de gevonden tekst in de textarea
             codeInput.setSelectionRange(match.start, match.end);
+            codeInput.scrollIntoView(match.start, match.end); 
 
-            // Scroll naar de selectie en focus op het element
             codeInput.focus();
-
             console.log(`Match ${currentMatchIndex + 1} van ${searchMatches.length} geselecteerd.`);
         }
 
-        // --- Geschiedenis Functies ---
+        // --- Geschiedenis Functies (AANGEPAST) ---
 
         function saveHistory() {
             localStorage.setItem('htmlTesterHistory', JSON.stringify(history));
@@ -250,38 +326,39 @@
 
         function loadHistory() {
             const stored = localStorage.getItem('htmlTesterHistory');
-            // Zorg ervoor dat de 'isFavorite' property bestaat, zelfs voor oudere items
             if (stored) {
                 history = JSON.parse(stored).map(item => ({
                     ...item,
-                    isFavorite: item.isFavorite || false // Voeg isFavorite toe indien afwezig
+                    isFavorite: item.isFavorite || false,
+                    lineCount: item.lineCount || 0 // Zorg dat lineCount bestaat
                 }));
             }
             renderHistory();
         }
 
+        function getLineCountOfCode(code) {
+             // Telt het aantal \n karakters + 1 (voor de laatste regel)
+            return (code.match(/\n/g) || []).length + (code.trim() !== '' ? 1 : 0);
+        }
+
         function addToHistory(code) {
-            // Check of het laatste item hetzelfde is om duplicaten te voorkomen
             if (history.length > 0 && history[0].code === code) return; 
 
             const newItem = {
                 code: code,
                 timestamp: new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
                 preview: code.replace(/<[^>]*>?/gm, '').substring(0, 30) || "Code snippet",
-                isFavorite: false // Nieuw item is standaard geen favoriet
+                isFavorite: false,
+                lineCount: getLineCountOfCode(code) // NIEUWE WAARDE: Aantal regels
             };
 
-            // Plaats het nieuwe item vooraan
             history.unshift(newItem);
 
-            // Verwijder het oudste item (tenzij het een favoriet is)
             while (history.length > 10) {
                 const lastIndex = history.length - 1;
                 if (!history[lastIndex].isFavorite) {
                     history.pop();
                 } else {
-                    // Als het laatste item een favoriet is, stoppen we met verwijderen
-                    // Dit zorgt ervoor dat de limiet van 10 alleen geldt voor NIET-favorieten.
                     break; 
                 }
             }
@@ -290,10 +367,9 @@
             renderHistory();
         }
 
-        // AANGEPASTE FUNCTIE: Verwijdert alleen NIET-favoriete items
         function clearHistory() {
             const favorites = history.filter(item => item.isFavorite);
-            history = favorites; // Behoud alleen de favorieten
+            history = favorites; 
             saveHistory();
             renderHistory();
             if (favorites.length === 0) {
@@ -303,16 +379,14 @@
             }
         }
         
-        // NIEUWE FUNCTIE: Toggle de favoriet-status van een item
         function toggleFavorite(index, event) {
-            event.stopPropagation(); // Voorkom dat de klik de code in de editor laadt
-            // Index is de index in de actuele 'history' array
+            event.stopPropagation(); 
             history[index].isFavorite = !history[index].isFavorite;
             saveHistory();
-            renderHistory(); // Herteken de lijst om de nieuwe status te tonen
+            renderHistory(); 
         }
 
-        // AANGEPASTE FUNCTIE: Rendert de geschiedenis inclusief favoriet-knop
+        // AANGEPAST om lineCount in de weergave op te nemen
         function renderHistory() {
             historyListEl.innerHTML = '';
             if (history.length === 0) {
@@ -320,30 +394,24 @@
                 return;
             }
             
-            // Render de items in de geschiedenis
             history.forEach((item, index) => {
                 const div = document.createElement('div');
-                // Voeg een visuele hint toe voor favorieten
                 const favoriteClass = item.isFavorite ? 'border-amber-500 ring-2 ring-amber-500/50' : 'border-transparent hover:border-slate-500';
 
                 div.className = `bg-slate-700 hover:bg-slate-600 p-2 rounded cursor-pointer transition relative ${favoriteClass}`;
                 
-                // Klik op de div laadt de code
-                div.onclick = () => { codeInput.value = item.code; resetSearch(); }; 
+                div.onclick = () => { codeInput.setValue(item.code); resetSearch(); }; 
                 
-                // Content van het geschiedenisitem
                 div.innerHTML = `
                     <div class="flex justify-between items-center mb-1">
                         <span class="text-xs font-bold ${item.isFavorite ? 'text-amber-400' : 'text-blue-400'}">#${history.length - index}</span>
                         <div class="flex items-center gap-2">
                             <span class="text-[10px] text-slate-400">${item.timestamp}</span>
-                            <!-- Favoriet-knop -->
-                            <button 
+                            <span class="text-[10px] text-slate-400 font-mono">Lijnen: ${item.lineCount}</span> <button 
                                 class="favorite-btn ${item.isFavorite ? 'is-favorite' : 'text-slate-500 hover:text-amber-500'}"
                                 onclick="toggleFavorite(${index}, event)"
                                 title="${item.isFavorite ? 'Favoriet uitschakelen' : 'Toevoegen aan favorieten'}"
                             >
-                                <!-- Ster-icoon (lucide-react, maar als SVG) -->
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
                                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                                 </svg>
