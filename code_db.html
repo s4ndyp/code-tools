@@ -1,1439 +1,528 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="nl" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Versiebeheer</title>
-    <!-- Laad Tailwind CSS voor snelle styling en het donkere thema -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome voor iconen -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <title>Code Versiebeheer - Project Hub</title>
     
-    <!-- Ace Editor voor Syntax Highlighting -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
-    
-    <script type="module">
-        // Globale constantes voor localStorage sleutels (V7)
-        const STORAGE_KEY_PROJECTS = 'code_projects_v7'; 
-        const STORAGE_KEY_ACTIVE_PROJECT = 'active_project_id_v7';
-        const STORAGE_KEY_ACTIVE_FILE = 'active_file_id_v7';
+    <script src="https://cdn.tailwindcss.com"></script>
 
-        // Globale staat
-        let activeProjectId = localStorage.getItem(STORAGE_KEY_ACTIVE_PROJECT) || null;
-        let activeFileId = localStorage.getItem(STORAGE_KEY_ACTIVE_FILE) || null;
-        
-        let expandedProjectId = activeProjectId; 
-        let expandedFileId = null; 
-        let isEditing = false;
-        let searchTerm = ''; // Voor de zoekfunctie
-        
-        // Ace Editor Instantie
-        let editor;
-        
-        // Callback voor de Confirmation Modal
-        let confirmationCallback = null; 
-
-        // --- HULPFUNCTIES ---
-
-        /**
-         * Genereert een unieke ID (eenvoudige UUID-achtige string).
-         */
-        const generateId = () => {
-            return Math.random().toString(36).substring(2, 9);
-        };
-        
-        /**
-         * Telt het aantal regels in de gegeven code.
-         */
-        const countLines = (code) => {
-            return code.split('\n').length;
-        };
-
-        /**
-         * Converteert een timestamp naar een leesbaar, gelokaliseerd datum/tijd-formaat.
-         */
-        const formatTimestamp = (timestamp) => {
-            if (!timestamp) return 'Onbekende datum';
-            return new Date(timestamp).toLocaleString('nl-NL', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
-        };
-        
-        /**
-         * Bepaalt de Ace Editor modus op basis van de bestandsnaam.
-         */
-        const getAceMode = (fileName) => {
-            const extension = fileName.split('.').pop().toLowerCase();
-            switch (extension) {
-                case 'js':
-                case 'json':
-                    return 'javascript';
-                case 'html':
-                case 'htm':
-                    return 'html';
-                case 'css':
-                    return 'css';
-                case 'py':
-                    return 'python';
-                case 'ts':
-                case 'tsx':
-                    return 'typescript';
-                case 'jsx':
-                    return 'jsx';
-                case 'java':
-                    return 'java';
-                case 'php':
-                    return 'php';
-                case 'md':
-                    return 'markdown';
-                case 'sh':
-                    return 'sh';
-                case 'sql':
-                    return 'sql';
-                default:
-                    return 'text';
-            }
-        };
-
-        /**
-         * Stelt de Ace Editor modus en thema in.
-         */
-        const setEditorMode = (fileName) => {
-            if (!editor) return;
-            const mode = getAceMode(fileName);
-            editor.session.setMode(`ace/mode/${mode}`);
-        };
-
-
-        // --- LOCAL STORAGE OPSLAAN/LADEN ---
-
-        function getAllProjects() {
-            const storedData = localStorage.getItem(STORAGE_KEY_PROJECTS);
-            return storedData ? JSON.parse(storedData) : [];
-        }
-
-        function saveAllProjects(projects) {
-            localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects));
-        }
-
-        function getProjectById(projectId) {
-            const projects = getAllProjects();
-            return projects.find(p => p.id === projectId) || null;
-        }
-        
-        /**
-         * Haalt een bestand op uit een project.
-         */
-        function getFileById(projectId, fileId) {
-            const project = getProjectById(projectId);
-            return project ? project.files.find(f => f.id === fileId) : null;
-        }
-        
-        /**
-         * Initialiseert Ace Editor en laadt de code van het actieve bestand.
-         */
-        function loadActiveFile() {
-            const file = getFileById(activeProjectId, activeFileId);
-            const project = getProjectById(activeProjectId);
-            const editorTitle = document.getElementById('editor-title-status');
-            
-            if (file && project) {
-                // Stel UI expansie in met de UNIEKE SLEUTELS
-                expandedProjectId = activeProjectId;
-                expandedFileId = `${activeProjectId}-${activeFileId}`;
-                
-                // Activeer syntax highlighting voor dit bestand
-                setEditorMode(file.name);
-                
-                if (file.versions.length > 0) {
-                    const latestVersion = file.versions[0];
-                    // Ace Editor: setValue vervangt textarea.value
-                    editor.setValue(latestVersion.code, -1); // -1 plaatst cursor bovenaan
-                    
-                    editorTitle.textContent = ` (Actief: ${project.name} / Bestand: ${file.name} / Geladen: V${latestVersion.major}.${latestVersion.minor})`;
-                    editorTitle.classList.remove('text-blue-400');
-                    editorTitle.classList.add('text-green-400');
-                    
-                } else {
-                    editor.setValue(`/* Bestand '${file.name}' is actief in project '${project.name}'. Maak een nieuwe versie. */`, -1);
-                    editorTitle.textContent = ` (Actief: ${project.name} / Bestand: ${file.name} / Géén Versie)`;
-                }
-            } else {
-                editor.setValue(`
-/*
-  Welkom bij je Code Versiebeheer App!
-  Klik op 'Nieuw Project Opslaan' om een nieuw project te starten.
-*/
-`, -1);
-                editorTitle.textContent = " (Geen actief project)";
-                setEditorMode('text.txt'); // Fallback naar platte tekst modus
-                activeProjectId = activeFileId = null;
-                expandedProjectId = expandedFileId = null;
-            }
-            renderVersionHistory(getAllProjects());
-        }
-
-        // --- MODAL & CONFIRMATION LOGICA (Vervangt alert/confirm) ---
-
-        /**
-         * Toont de algemene bevestigingsmodal.
-         */
-        window.showConfirmation = (title, message, onConfirm) => {
-            confirmationCallback = onConfirm;
-            document.getElementById('conf-title').textContent = title;
-            document.getElementById('conf-message').innerHTML = message;
-            document.getElementById('confirmation-modal').classList.remove('hidden');
-        };
-
-        window.handleConfirm = () => {
-            document.getElementById('confirmation-modal').classList.add('hidden');
-            if (confirmationCallback) {
-                confirmationCallback(true);
-                confirmationCallback = null;
-            }
-        };
-
-        window.handleCancel = () => {
-            document.getElementById('confirmation-modal').classList.add('hidden');
-            confirmationCallback(false);
-            confirmationCallback = null;
-        };
-
-
-        // --- ACTIES: NIEUW PROJECT OPSLAAN ---
-
-        /**
-         * Slaat de huidige code op als een NIEUW Project met een initieel bestand.
-         */
-        window.saveNewProject = () => {
-            const codeContent = editor.getValue(); // Ace Editor: getValue()
-
-            if (codeContent.trim() === '') {
-                showToast("Kan geen leeg nieuw project opslaan.", 'bg-red-500');
-                return;
-            }
-
-            const projectName = prompt(`Geef een naam op voor het nieuwe Project:`);
-            if (!projectName || projectName.trim() === '') {
-                showToast("Opslag geannuleerd of ongeldige naam.", 'bg-red-500');
-                return;
-            }
-            
-            const fileName = prompt(`Geef een naam op voor het eerste bestand (bv: index.html):`);
-             if (!fileName || fileName.trim() === '') {
-                showToast("Opslag geannuleerd of ongeldige bestandsnaam.", 'bg-red-500');
-                return;
-            }
-            
-            // GITHUB INVOER (Nieuwe Eis)
-            const gitRepoUrl = prompt(`Geef de GitHub Repository URL op (optioneel, bv: https://github.com/gebruiker/repo):`);
-            const gitBranch = prompt(`Geef de GitHub Branch op (optioneel, bv: main):`, 'main');
-            
-            const note = prompt("Voeg een notitie toe voor de eerste Major Versie (V1.0):", "Eerste setup en initieel ontwerp.");
-            if (note === null) {
-                showToast("Opslag geannuleerd (Notitie vereist).", 'bg-red-500');
-                return;
-            }
-
-
-            const projects = getAllProjects();
-            const newProjectId = generateId();
-            const newFileId = generateId();
-
-            const newVersion = {
-                id: generateId(), 
-                code: codeContent,
-                timestamp: Date.now(),
-                major: 1, 
-                minor: 0,
-                name: "V1.0",
-                note: note, // Versie Notitie
-                isStable: true,
-                lineCount: countLines(codeContent), // Regeltelling
-            };
-            
-            const newFile = {
-                id: newFileId,
-                name: fileName,
-                versions: [newVersion],
-            };
-
-            const newProject = {
-                id: newProjectId,
-                name: projectName,
-                gitRepoUrl: gitRepoUrl || null,
-                gitBranch: gitBranch || 'main',
-                files: [newFile],
-            };
-
-            projects.unshift(newProject); 
-            saveAllProjects(projects);
-            
-            setActiveItem(newProjectId, newFileId); 
-            showToast(`Nieuw Project '${projectName}' succesvol opgeslagen!`, 'bg-green-500');
-        }
-        
-        // --- ACTIES: NIEUW BESTAND MAKEN ---
-        
-        /**
-         * Maakt een nieuw bestand aan in het actieve project.
-         */
-        window.createNewFile = () => {
-            if (!activeProjectId) {
-                showToast("Geen actief project geselecteerd. Start een nieuw project.", 'bg-red-500');
-                return;
-            }
-
-            const projects = getAllProjects();
-            const projectIndex = projects.findIndex(p => p.id === activeProjectId);
-            if (projectIndex === -1) return;
-
-            const project = projects[projectIndex];
-
-            const fileName = prompt(`Geef een naam op voor het nieuwe bestand in Project '${project.name}' (bv: styles.css):`);
-            if (!fileName || fileName.trim() === '') {
-                showToast("Opslag geannuleerd of ongeldige naam.", 'bg-red-500');
-                return;
-            }
-            
-            const newFileId = generateId();
-            const newFile = {
-                id: newFileId,
-                name: fileName,
-                versions: [], // Start zonder versies
-            };
-
-            project.files.unshift(newFile);
-            saveAllProjects(projects);
-
-            setActiveItem(activeProjectId, newFileId);
-            editor.setValue(`/* Nieuw bestand '${fileName}' aangemaakt. Voeg code toe en verhoog de versie! */`, -1); // Ace Editor
-            showToast(`Bestand '${fileName}' aangemaakt in project '${project.name}'.`, 'bg-green-500');
-        };
-
-        // --- ACTIES: VERSIE OPSLAAN (MAJOR) ---
-
-        /**
-         * Voegt de huidige code toe als een nieuwe MAJOR versie (versie ophogen).
-         */
-        window.saveMajorVersion = () => {
-            if (!activeFileId) {
-                showToast("Geen actief bestand geselecteerd. Selecteer of maak een bestand aan.", 'bg-red-500');
-                return;
-            }
-
-            const codeContent = editor.getValue(); // Ace Editor: getValue()
-            if (codeContent.trim() === '') {
-                showToast("Kan geen lege versie opslaan.", 'bg-red-500');
-                return;
-            }
-
-            const projects = getAllProjects();
-            const projectIndex = projects.findIndex(p => p.id === activeProjectId);
-            const project = projects[projectIndex];
-            const activeFileIndex = project?.files.findIndex(f => f.id === activeFileId);
-            const activeFile = project?.files[activeFileIndex];
-
-            if (!activeFile) return;
-
-            const latestVersion = activeFile.versions.length > 0 ? activeFile.versions[0] : null;
-
-            // Nieuwe Major logica: verhoog major, reset minor
-            const major = latestVersion ? latestVersion.major + 1 : 1;
-            const minor = 0;
-            const versionName = `V${major}.${minor}`;
-            
-            // Notitie is verplicht bij Major Versie
-            const note = prompt(`Voeg een notitie toe voor de Major Versie (${versionName}):`, `Grote feature update of refactoring.`);
-            if (note === null) {
-                showToast("Opslag geannuleerd (Notitie vereist).", 'bg-red-500');
-                return;
-            }
-
-            const newVersion = {
-                id: generateId(),
-                code: codeContent,
-                timestamp: Date.now(),
-                major: major,
-                minor: minor,
-                name: versionName,
-                note: note, // Versie Notitie
-                isStable: true, // Major is standaard stable
-                lineCount: countLines(codeContent), // Regeltelling
-            };
-
-            // Voeg de nieuwe versie toe aan het begin van de versies (nieuwste bovenaan)
-            activeFile.versions.unshift(newVersion);
-            saveAllProjects(projects);
-            
-            renderVersionHistory(projects); 
-            showToast(`Major Versie opgehoogd naar V${major}.${minor} voor bestand '${activeFile.name}'.`, 'bg-green-500');
-        };
-
-        // --- ACTIES: SUBVERSIE OPSLAAN (MINOR) ---
-        
-        /**
-         * Voegt de huidige code toe als een nieuwe MINOR versie (subversie ophogen).
-         */
-        window.saveMinorVersion = () => {
-            if (!activeFileId) {
-                showToast("Geen actief bestand geselecteerd. Selecteer of maak een bestand aan.", 'bg-red-500');
-                return;
-            }
-
-            const codeContent = editor.getValue(); // Ace Editor: getValue()
-            if (codeContent.trim() === '') {
-                showToast("Kan geen lege subversie opslaan.", 'bg-red-500');
-                return;
-            }
-
-            const projects = getAllProjects();
-            const projectIndex = projects.findIndex(p => p.id === activeProjectId);
-            const project = projects[projectIndex];
-            const activeFileIndex = project?.files.findIndex(f => f.id === activeFileId);
-            const activeFile = project?.files[activeFileIndex];
-
-            if (!activeFile) {
-                showToast("Actief bestand niet gevonden.", 'bg-red-500');
-                return;
-            }
-            
-            const latestVersion = activeFile.versions.length > 0 ? activeFile.versions[0] : null;
-
-            if (!latestVersion) {
-                showToast("Kan geen subversie maken zonder een basisversie (Maak eerst een Major Versie).", 'bg-red-500');
-                return;
-            }
-
-            // Subversie Logica: behoud major, verhoog minor
-            const major = latestVersion.major;
-            const minor = latestVersion.minor + 1;
-            const versionName = `V${major}.${minor}`;
-            
-            // Geen notitie prompt voor Minor Versies (vereenvoudiging)
-
-            const newVersion = {
-                id: generateId(),
-                code: codeContent,
-                timestamp: Date.now(),
-                major: major,
-                minor: minor,
-                name: versionName,
-                note: null, // Notitie is nu optioneel/null voor minor
-                isStable: false, // Minor is standaard niet stable
-                lineCount: countLines(codeContent), // Regeltelling
-            };
-
-            activeFile.versions.unshift(newVersion);
-            saveAllProjects(projects);
-            
-            renderVersionHistory(projects); 
-            showToast(`Subversie opgehoogd naar V${major}.${minor} voor bestand '${activeFile.name}'.`, 'bg-green-500');
-        };
-        
-        /**
-         * Kopieert de inhoud van de code-editor naar het klembord.
-         */
-        window.copyCodeToClipboard = () => {
-            const codeContent = editor.getValue(); // Ace Editor: getValue()
-            
-            // Gebruik een tijdelijke textarea voor de execCommand('copy') API
-            const tempTextarea = document.createElement('textarea');
-            tempTextarea.value = codeContent;
-            document.body.appendChild(tempTextarea);
-            
-            try {
-                tempTextarea.select();
-                const success = document.execCommand('copy');
-                if (success) {
-                    showToast("Code gekopieerd naar klembord!", 'bg-green-600');
-                } else {
-                    showToast("Kopiëren mislukt. Probeer handmatig te selecteren.", 'bg-red-500');
-                }
-            } catch (err) {
-                console.error('Fout bij kopiëren:', err);
-                showToast("Kopiëren mislukt. Probeer handmatig te selecteren.", 'bg-red-500');
-            } finally {
-                document.body.removeChild(tempTextarea);
-            }
-        };
-        
-        /**
-         * Maakt de editor leeg na bevestiging.
-         */
-        window.clearEditor = () => {
-             window.showConfirmation(
-                "Wis Editor Bevestigen",
-                "Weet je zeker dat je de huidige inhoud van de editor wilt wissen? Dit wordt **NIET** opgeslagen!",
-                (confirmed) => {
-                    if (confirmed) {
-                        editor.setValue('', -1);
-                        showToast("Editor leeggemaakt.", 'bg-red-500');
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    colors: {
+                        dark: '#0f172a', dark_paper: '#1e293b', dark_border: '#334155',
+                        primary: '#6366f1', primary_hover: '#4f46e5', success: '#22c55e', danger: '#ef4444'
                     }
                 }
-            );
-        };
-        
-        /**
-         * Toont de GitHub push instructies modal.
-         */
-        window.pushToGitHub = () => {
-            if (!activeProjectId || !activeFileId) {
-                showToast("Selecteer eerst een actief project en bestand.", 'bg-red-500');
-                return;
             }
-
-            const project = getProjectById(activeProjectId);
-            const file = getFileById(activeProjectId, activeFileId);
-            const codeContent = editor.getValue();
-            const latestVersion = file.versions.length > 0 ? file.versions[0] : { name: "N/A", note: "Handmatige push zonder opgeslagen versie." };
-            
-            if (!project.gitRepoUrl) {
-                window.showConfirmation(
-                    "GitHub Project Gegevens Ontbreken",
-                    `Dit project ('${project.name}') heeft **geen** GitHub Repository URL ingesteld. Wil je het project bewerken om een URL toe te voegen?`,
-                    (confirmed) => {
-                        if (confirmed) {
-                            showToast("Gebruik de Bewerk Modus om de URL toe te voegen.", 'bg-yellow-500');
-                            window.toggleEditMode(); // Schakel bewerkingsmodus in
-                        }
-                    }
-                );
-                return;
-            }
-
-            // Vul de modal
-            const gitModal = document.getElementById('github-modal');
-            document.getElementById('git-project-name').textContent = project.name;
-            document.getElementById('git-file-name').textContent = file.name;
-            document.getElementById('git-repo-url').textContent = project.gitRepoUrl;
-            document.getElementById('git-branch').textContent = project.gitBranch || 'main';
-            document.getElementById('git-version').textContent = latestVersion.name;
-            document.getElementById('git-commit-message').value = `[${file.name}] ${latestVersion.name}: ${latestVersion.note || 'Minor update.'}`;
-            
-            // Kopieer de Code
-            document.getElementById('git-copy-code-button').onclick = () => {
-                const tempTextarea = document.createElement('textarea');
-                tempTextarea.value = codeContent;
-                document.body.appendChild(tempTextarea);
-                tempTextarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(tempTextarea);
-                showToast("Code gekopieerd naar klembord!", 'bg-green-600');
-            };
-            
-            // Kopieer de Commit Message
-            document.getElementById('git-copy-message-button').onclick = () => {
-                document.getElementById('git-commit-message').select();
-                document.execCommand('copy');
-                showToast("Commit bericht gekopieerd naar klembord!", 'bg-green-600');
-            };
-
-
-            gitModal.classList.remove('hidden');
-        };
-
-        window.closeGitModal = () => {
-            document.getElementById('github-modal').classList.add('hidden');
-        };
-
-        // --- DATA EXPORT/IMPORT LOGICA ---
-
-        window.exportData = () => {
-            const allProjects = getAllProjects();
-            if (allProjects.length === 0) {
-                showToast("Geen gegevens om te exporteren.", 'bg-red-500');
-                return;
-            }
-            const dataStr = JSON.stringify(allProjects, null, 2);
-            const blob = new Blob([dataStr], { type: 'application/json' });
-            
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            const date = new Date().toISOString().slice(0, 10);
-            link.download = `code_version_backup_${date}.json`;
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            
-            showToast("Gegevens succesvol geëxporteerd!", 'bg-indigo-600');
-        };
-
-        window.triggerImport = () => {
-            document.getElementById('importFile').click();
-        };
-
-        function handleImport(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const importedProjects = JSON.parse(e.target.result);
-                    
-                    if (!Array.isArray(importedProjects)) {
-                        throw new Error("Ongeldig JSON-formaat: verwacht een array.");
-                    }
-
-                    // Eenvoudige validatie voor V7 structuur
-                    if (importedProjects.length > 0 && (!importedProjects[0].id || !Array.isArray(importedProjects[0].files))) {
-                         throw new Error("Ongeldige datastructuur in JSON. Zorg ervoor dat het een geldige V7 backup is.");
-                    }
-                    
-                    window.showConfirmation(
-                        "Import Bevestigen",
-                        `Weet je zeker dat je ${importedProjects.length} projecten wilt importeren? Dit zal **alle HUIDIGE data OVERSSCHRIJVEN**.`,
-                        (confirmed) => {
-                            if (!confirmed) return;
-                            
-                            saveAllProjects(importedProjects);
-                            activeProjectId = activeFileId = null;
-                            localStorage.removeItem(STORAGE_KEY_ACTIVE_PROJECT);
-                            localStorage.removeItem(STORAGE_KEY_ACTIVE_FILE);
-                            loadActiveFile();
-                            
-                            showToast(`Succesvol ${importedProjects.length} projecten geïmporteerd!`, 'bg-green-600');
-                        }
-                    );
-
-                } catch (error) {
-                    console.error("Fout bij importeren:", error);
-                    showToast(`Import mislukt: ${error.message}`, 'bg-red-600');
-                }
-            };
-            reader.readAsText(file);
-            
-            event.target.value = null; 
         }
-
-        // --- SCHAKEL LOGICA ---
-
-        /**
-         * Stelt een project en bestand in als actief en werkt de editor bij.
-         */
-        window.setActiveItem = (projectId, fileId) => {
-            activeProjectId = projectId;
-            activeFileId = fileId; 
-            
-            // Gebruik de unieke samengestelde sleutels voor de expanded states
-            expandedProjectId = projectId; 
-            expandedFileId = `${projectId}-${fileId}`; 
-            
-            localStorage.setItem(STORAGE_KEY_ACTIVE_PROJECT, projectId);
-            localStorage.setItem(STORAGE_KEY_ACTIVE_FILE, fileId);
-
-            loadActiveFile(); // Laadt code, toont toast en rendert UI
-        };
-
-        /**
-         * Laadt een specifieke versie in de editor.
-         */
-        window.switchVersionHandler = (projectId, fileId, versionId) => {
-            if (isEditing) return; 
-
-            const file = getFileById(projectId, fileId);
-            const project = getProjectById(projectId);
-            if (!file || !project) return;
-
-            const version = file.versions.find(v => v.id === versionId);
-
-            if (version) {
-                // Zet de geladen versie als actief
-                if (activeFileId !== fileId || activeProjectId !== projectId) {
-                    setActiveItem(projectId, fileId);
-                }
-                
-                // Ace Editor: setValue
-                editor.setValue(version.code, -1); 
-                setEditorMode(file.name); // Stel modus in op basis van het geladen bestand
-
-                showToast(`Versie V${version.major}.${version.minor} geladen uit bestand '${file.name}'.`, 'bg-blue-600');
-                
-                const editorTitle = document.getElementById('editor-title-status');
-                editorTitle.textContent = ` (Actief: ${project.name} / Bestand: ${file.name} / Geladen: V${version.major}.${version.minor})`;
-                editorTitle.classList.remove('text-green-400');
-                editorTitle.classList.add('text-blue-400');
-            }
-        };
-        
-        // --- DOWNLOAD LOGICA (AANGEPAST) ---
-
-        /**
-         * Downloadt de code van een specifieke versie van een bestand.
-         */
-        window.downloadVersion = (projectId, fileId, versionId, fileName) => {
-            const file = getFileById(projectId, fileId);
-            const version = file?.versions.find(v => v.id === versionId);
-            
-            if (!file || !version) {
-                showToast("Versie niet gevonden om te downloaden.", 'bg-red-500');
-                return;
-            }
-
-            const codeContent = version.code;
-
-            const blob = new Blob([codeContent], { type: 'text/plain' });
-            
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            
-            // Gebruik de bestandsnaam voor de download
-            link.download = fileName;
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            
-            showToast(`Versie V${version.major}.${version.minor} gedownload als '${fileName}'.`, 'bg-indigo-600');
-        };
-
-        
-        // --- KLAP-UIT/KLAP-IN LOGICA is ongewijzigd ---
-
-        /**
-         * Klapt de bestanden van een project in of uit.
-         */
-        window.toggleFiles = (projectId) => {
-            if (isEditing) return;
-
-            // Inklappen van eventuele andere uitgeklapte projecten
-            if (expandedProjectId && expandedProjectId !== projectId) {
-                document.getElementById(`file-list-container-${expandedProjectId}`).classList.add('hidden');
-                document.getElementById(`project-caret-${expandedProjectId}`).classList.remove('rotate-180');
-            }
-
-            const currentContainer = document.getElementById(`file-list-container-${projectId}`);
-            const currentCaret = document.getElementById(`project-caret-${projectId}`);
-
-            if (currentContainer.classList.contains('hidden')) {
-                currentContainer.classList.remove('hidden');
-                currentCaret.classList.add('rotate-180');
-                expandedProjectId = projectId;
-            } else {
-                currentContainer.classList.add('hidden');
-                currentCaret.classList.remove('rotate-180');
-                expandedProjectId = null;
-            }
-        };
-
-
-        /**
-         * Klapt de versies van een bestand in of uit.
-         * De unieke sleutel is ProjectID-FileID.
-         */
-        window.toggleVersions = (uniqueFileKey) => {
-            if (isEditing) return;
-
-            // 1. Klap de eerder uitgeklapte file (versions) in (indien verschillend)
-            if (expandedFileId && expandedFileId !== uniqueFileKey) {
-                const oldContainer = document.getElementById(`version-list-container-${expandedFileId}`);
-                const oldCaret = document.getElementById(`file-caret-${expandedFileId}`);
-                if (oldContainer) oldContainer.classList.add('hidden');
-                if (oldCaret) oldCaret.classList.remove('rotate-180');
-            }
-
-            // 2. Toon/verberg de huidige
-            const currentContainer = document.getElementById(`version-list-container-${uniqueFileKey}`);
-            const currentCaret = document.getElementById(`file-caret-${uniqueFileKey}`);
-
-            if (currentContainer.classList.contains('hidden')) {
-                currentContainer.classList.remove('hidden');
-                currentCaret.classList.add('rotate-180');
-                expandedFileId = uniqueFileKey;
-            } else {
-                currentContainer.classList.add('hidden');
-                currentCaret.classList.remove('rotate-180');
-                expandedFileId = null;
-            }
-        };
-        
-        // --- RENAME LOGICA is ongewijzigd ---
-        
-        window.renameProject = (projectId, currentName) => {
-            if (!isEditing) return;
-            // Omdat we prompt() gebruiken, is de confirm modal hier niet nodig
-            const newName = prompt(`Hernoem Project '${currentName}':`, currentName);
-            if (!newName || newName.trim() === '' || newName === currentName) return;
-            
-            const projects = getAllProjects();
-            const project = projects.find(p => p.id === projectId);
-            if (project) {
-                // Ook GitHub URL en Branch hernoemen/updaten
-                const newRepoUrl = prompt(`Update de GitHub Repository URL (huidig: ${project.gitRepoUrl || 'Geen'}):`, project.gitRepoUrl || '');
-                const newBranch = prompt(`Update de GitHub Branch (huidig: ${project.gitBranch || 'main'}):`, project.gitBranch || 'main');
-                
-                project.name = newName;
-                project.gitRepoUrl = newRepoUrl || null;
-                project.gitBranch = newBranch || 'main';
-                
-                saveAllProjects(projects);
-                loadActiveFile(); 
-                showToast(`Project hernoemd naar '${newName}' en GitHub-info bijgewerkt.`, 'bg-indigo-600');
-            }
-        };
-        
-        window.renameFile = (projectId, fileId, currentName) => {
-            if (!isEditing) return;
-            const newName = prompt(`Hernoem Bestand '${currentName}':`, currentName);
-            if (!newName || newName.trim() === '' || newName === currentName) return;
-            
-            const projects = getAllProjects();
-            const project = projects.find(p => p.id === projectId);
-            const file = project?.files.find(f => f.id === fileId);
-            
-            if (file) {
-                file.name = newName;
-                saveAllProjects(projects);
-                loadActiveFile(); 
-                showToast(`Bestand hernoemd naar '${newName}'.`, 'bg-indigo-600');
-            }
-        };
-        
-        // --- CODE KOPIËREN (Versie) is ongewijzigd ---
-        
-        window.copyVersionCode = (projectId, fileId, versionId) => {
-             const file = getFileById(projectId, fileId);
-             const version = file?.versions.find(v => v.id === versionId);
-             
-             if (!version) {
-                 showToast("Versiecode niet gevonden.", 'bg-red-500');
-                 return;
-             }
-             
-             // Gebruik een tijdelijke textarea voor de execCommand('copy') API
-             const tempTextarea = document.createElement('textarea');
-             tempTextarea.value = version.code;
-             document.body.appendChild(tempTextarea);
-             tempTextarea.select();
-             document.execCommand('copy');
-             document.body.removeChild(tempTextarea);
-             
-             showToast(`Code V${version.major}.${version.minor} gekopieerd!`, 'bg-green-600');
-        };
-        
-        // --- LABEL TOGGLE LOGICA is ongewijzigd ---
-
-        /**
-         * Schakelt de stable labelstatus van een specifieke versie in localStorage.
-         */
-        window.toggleVersionLabel = (projectId, fileId, versionId, labelType) => {
-            // labelType is altijd 'isStable'
-            if (isEditing || labelType !== 'isStable') return; 
-
-            const projects = getAllProjects();
-            const projectIndex = projects.findIndex(p => p.id === projectId);
-            const fileIndex = projects[projectIndex]?.files.findIndex(f => f.id === fileId);
-            
-            if (projectIndex === -1 || fileIndex === -1) return;
-
-            const versionIndex = projects[projectIndex].files[fileIndex].versions.findIndex(v => v.id === versionId);
-            
-            if (versionIndex === -1) return;
-            
-            const currentStatus = projects[projectIndex].files[fileIndex].versions[versionIndex][labelType];
-            projects[projectIndex].files[fileIndex].versions[versionIndex][labelType] = !currentStatus;
-
-            saveAllProjects(projects);
-            renderVersionHistory(projects); 
-            showToast(`Stable label ${!currentStatus ? 'ingeschakeld' : 'uitgeschakeld'}.`, 'bg-indigo-600');
-        };
-
-        // --- VERWIJDER LOGICA (Gebruikt nu showConfirmation) ---
-
-        /**
-         * Schakelt de bewerkingsmodus in/uit en rendert de geschiedenis opnieuw.
-         */
-        window.toggleEditMode = () => {
-            isEditing = !isEditing;
-            const editButton = document.getElementById('edit-mode-button');
-            editButton.classList.toggle('bg-red-500', isEditing);
-            editButton.classList.toggle('hover:bg-red-600', isEditing);
-            editButton.classList.toggle('bg-gray-600', !isEditing);
-            editButton.classList.toggle('hover:bg-gray-700', !isEditing);
-            editButton.textContent = isEditing ? 'Bewerk Modus (Aan)' : 'Bewerk Modus (Uit)';
-
-            showToast(isEditing ? "Bewerk Modus Ingeschakeld. Klik op prullenbakjes om te verwijderen of potloodjes om te hernoemen." : "Bewerk Modus Uitgeschakeld.", 'bg-yellow-600');
-            renderVersionHistory(getAllProjects());
-        };
-        
-        window.deleteProject = (projectId) => {
-            window.showConfirmation(
-                "Verwijder Project Bevestigen",
-                `Weet je zeker dat je dit **HELE PROJECT** wilt verwijderen? Alle bestanden en versies gaan verloren.`,
-                (confirmed) => {
-                    if (!confirmed) return;
-
-                    let projects = getAllProjects();
-                    projects = projects.filter(p => p.id !== projectId);
-                    saveAllProjects(projects);
-
-                    if (activeProjectId === projectId) {
-                        activeProjectId = activeFileId = null;
-                        localStorage.removeItem(STORAGE_KEY_ACTIVE_PROJECT);
-                        localStorage.removeItem(STORAGE_KEY_ACTIVE_FILE);
-                        loadActiveFile();
-                    } else {
-                        renderVersionHistory(projects);
-                    }
-                    showToast("Project succesvol verwijderd.", 'bg-red-600');
-                }
-            );
-        };
-
-        window.deleteFile = (projectId, fileId) => {
-            const file = getFileById(projectId, fileId);
-            if (!file) return;
-
-            window.showConfirmation(
-                "Verwijder Bestand Bevestigen",
-                `Weet je zeker dat je het bestand **'${file.name}'** en alle versies erin wilt verwijderen?`,
-                (confirmed) => {
-                    if (!confirmed) return;
-
-                    const projects = getAllProjects();
-                    const projectIndex = projects.findIndex(p => p.id === projectId);
-                    if (projectIndex === -1) return;
-
-                    let project = projects[projectIndex];
-                    project.files = project.files.filter(f => f.id !== fileId);
-
-                    if (activeProjectId === projectId && activeFileId === fileId) {
-                        const newActiveFile = project.files[0];
-                        setActiveItem(projectId, newActiveFile ? newActiveFile.id : null);
-                    } else {
-                        saveAllProjects(projects);
-                        renderVersionHistory(projects);
-                    }
-                    showToast("Bestand succesvol verwijderd.", 'bg-red-600');
-                }
-            );
-        };
-
-        window.deleteVersion = (projectId, fileId, versionId) => {
-            window.showConfirmation(
-                "Verwijder Versie Bevestigen",
-                "Weet je zeker dat je deze **VERSIE** wilt verwijderen?",
-                (confirmed) => {
-                    if (!confirmed) return;
-
-                    const projects = getAllProjects();
-                    const projectIndex = projects.findIndex(p => p.id === projectId);
-                    const fileIndex = projects[projectIndex]?.files.findIndex(f => f.id === fileId);
-                    if (projectIndex === -1 || fileIndex === -1) return;
-
-                    let file = projects[projectIndex].files[fileIndex];
-                    file.versions = file.versions.filter(v => v.id !== versionId);
-
-                    saveAllProjects(projects);
-                    renderVersionHistory(projects);
-                    showToast("Versie succesvol verwijderd.", 'bg-red-600');
-                }
-            );
-        };
-
-
-        // --- UI RENDERING (met Zoek- en Lijnvergelijking) ---
-
-        /**
-         * Rendert de lijst met projecten, bestanden en hun versies.
-         */
-        function renderVersionHistory(projects) {
-            const historyContainer = document.getElementById('version-history');
-            historyContainer.innerHTML = '';
-            
-            // Filter projecten op basis van de zoekterm
-            const filteredProjects = projects.filter(project => 
-                project.name.toLowerCase().includes(searchTerm) ||
-                project.files.some(file => file.name.toLowerCase().includes(searchTerm))
-            );
-
-            if (filteredProjects.length === 0 && projects.length > 0) {
-                 historyContainer.innerHTML = `<p class="p-4 text-gray-400 text-sm">Geen resultaten gevonden voor '${document.getElementById('search-input').value}'.</p>`;
-                 return;
-            } else if (projects.length === 0) {
-                historyContainer.innerHTML = `<p class="p-4 text-gray-400 text-sm">Nog geen projecten opgeslagen. Gebruik de knop 'Nieuw Project Opslaan'.</p>`;
-                return;
-            }
-
-            filteredProjects.forEach((project) => {
-                const isActiveProject = project.id === activeProjectId;
-                const isExpandedProject = project.id === expandedProjectId;
-
-                // 1. PROJECT TITEL
-                const projectItem = document.createElement('li');
-                projectItem.className = `p-3 mt-2 transition duration-150 rounded-md ${isActiveProject ? 'bg-green-700/50 border-2 border-green-500' : 'bg-gray-700/50 hover:bg-gray-700'}`;
-                
-                projectItem.innerHTML = `
-                    <div class="flex justify-between items-center text-white cursor-pointer" onclick="window.toggleFiles('${project.id}')">
-                        <div class="flex items-center space-x-2 truncate">
-                            ${!isEditing ? 
-                                `<svg id="project-caret-${project.id}" class="w-4 h-4 transition-transform duration-200 ${isExpandedProject ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`
-                                : ''}
-                            <span class="truncate font-bold text-lg">${project.name} ${isActiveProject ? ' (Huidig)' : ''}</span>
-                        </div>
-                        
-                        <div class="flex items-center space-x-2">
-                            ${isEditing ? 
-                                `<button class="text-gray-400 hover:text-yellow-400 p-1" onclick="event.stopPropagation(); renameProject('${project.id}', '${project.name}')" title="Hernoem project en bewerk GitHub-gegevens">
-                                    <i class="fas fa-pencil-alt text-sm"></i>
-                                </button>
-                                <button class="text-red-500 hover:text-red-400 p-1" onclick="event.stopPropagation(); deleteProject('${project.id}')" title="Verwijder project">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>` 
-                                : ''}
-                        </div>
-                    </div>
-                `;
-                historyContainer.appendChild(projectItem);
-
-                // 2. FILES CONTAINER 
-                const fileListContainer = document.createElement('ul');
-                fileListContainer.id = `file-list-container-${project.id}`;
-                fileListContainer.className = isExpandedProject ? 'block divide-y divide-y-reverse divide-gray-700 pl-4' : 'hidden divide-y divide-y-reverse divide-gray-700 pl-4'; 
-                
-                // Filter bestanden op basis van zoekterm
-                const filteredFiles = project.files.filter(file => file.name.toLowerCase().includes(searchTerm));
-                
-                if (filteredFiles.length === 0) {
-                    fileListContainer.innerHTML = `<li class="py-2 text-gray-500 text-xs pl-2">Geen bestanden in dit project die matchen met de zoekterm.</li>`;
-                } else {
-                    filteredFiles.forEach((file) => {
-                        const isActiveFile = file.id === activeFileId && isActiveProject;
-
-                        // File Unieke ID
-                        const uniqueFileKey = `${project.id}-${file.id}`;
-                        const isExpandedFile = uniqueFileKey === expandedFileId;
-
-                        // File Titel
-                        const fileItem = document.createElement('li');
-                        fileItem.className = `py-2 mt-1 font-normal transition duration-150 rounded-md ${isActiveFile ? 'bg-gray-700 border-l-2 border-blue-500' : 'hover:bg-gray-700'}`;
-
-                        fileItem.innerHTML = `
-                            <div class="flex justify-between items-center text-white cursor-pointer p-2" onclick="window.toggleVersions('${uniqueFileKey}')">
-                                <div class="flex items-center space-x-2 truncate">
-                                    ${!isEditing ? 
-                                        `<svg id="file-caret-${uniqueFileKey}" class="w-3 h-3 transition-transform duration-200 ${isExpandedFile ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`
-                                        : ''}
-                                    <span class="text-gray-400 truncate text-sm">${file.name} ${isActiveFile ? ' (Actief)' : ''}</span>
-                                </div>
-                                <div class="flex items-center space-x-2">
-                                    ${!isActiveFile && !isEditing ? 
-                                        `<button class="text-xs bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-0.5 px-2 rounded-lg shadow-sm ml-4"
-                                                onclick="event.stopPropagation(); setActiveItem('${project.id}', '${file.id}')">
-                                            Activeer
-                                        </button>` 
-                                        : ''}
-                                    ${isEditing ? 
-                                        `<button class="text-gray-400 hover:text-yellow-400 p-1" onclick="event.stopPropagation(); renameFile('${project.id}', '${file.id}', '${file.name}')" title="Hernoem bestand">
-                                            <i class="fas fa-pencil-alt text-sm"></i>
-                                        </button>
-                                        <button class="text-red-500 hover:text-red-400 p-1" onclick="event.stopPropagation(); deleteFile('${project.id}', '${file.id}')" title="Verwijder bestand">
-                                            <i class="fas fa-trash-alt"></i>
-                                        </button>` 
-                                        : ''}
-                                </div>
-                            </div>
-                        `;
-                        fileListContainer.appendChild(fileItem);
-
-                        // 3. VERSIES CONTAINER 
-                        const versionListContainer = document.createElement('ul');
-                        versionListContainer.id = `version-list-container-${uniqueFileKey}`; 
-                        versionListContainer.className = isExpandedFile ? 'block divide-y divide-gray-700' : 'hidden divide-y divide-gray-700'; 
-                        
-                        if (file.versions.length === 0) {
-                            versionListContainer.innerHTML = `<li class="pl-8 py-2 text-gray-500 text-xs">Geen versies in dit bestand.</li>`;
-                        } else {
-                            file.versions.forEach((v, index) => {
-                                const versionItem = document.createElement('li');
-                                versionItem.className = 'pl-8 py-2 hover:bg-gray-700 transition duration-150 cursor-pointer';
-                                
-                                // Bepaal Lijnvergelijking
-                                let lineCountColor = 'text-gray-500'; // Standaard
-                                if (index < file.versions.length - 1) {
-                                    const nextVersion = file.versions[index + 1]; // Vorige versie in de tijd
-                                    const lineCountDifference = v.lineCount - (nextVersion.lineCount || 0);
-                                    
-                                    if (lineCountDifference > 0) {
-                                        lineCountColor = 'text-green-400'; // Meer regels
-                                    } else if (lineCountDifference < 0) {
-                                        lineCountColor = 'text-red-400'; // Minder regels
-                                    } else {
-                                        lineCountColor = 'text-blue-400'; // Gelijk aantal regels
-                                    }
-                                }
-
-                                versionItem.innerHTML = `
-                                    <div class="flex justify-between items-center" title="${v.note || 'Geen notitie'}">
-                                        <div class="font-normal text-gray-200 truncate mr-2 text-xs flex flex-col">
-                                            <span>${v.name}</span>
-                                            ${v.note ? `<span class="text-gray-200 truncate italic text-[10px]">${v.note}</span>` : ''}
-                                        </div>
-                                        <div class="text-xs flex-shrink-0 flex flex-col items-end">
-                                            <p class="text-gray-500">${formatTimestamp(v.timestamp)}</p>
-                                            <p class="${lineCountColor} font-semibold mt-1">
-                                                ${v.lineCount} ${v.lineCount === 1 ? 'regel' : 'regels'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="flex items-center justify-between mt-2">
-                                        <div class="flex items-center space-x-2">
-                                            <button class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-2 rounded-lg shadow-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}"
-                                                    ${isEditing ? 'disabled' : ''}
-                                                    onclick="switchVersionHandler('${project.id}', '${file.id}', '${v.id}')">
-                                                Laad Versie
-                                            </button>
-                                            
-                                            <button class="text-xs text-gray-300 hover:text-white bg-gray-600 hover:bg-gray-700 font-medium py-1 px-2 rounded-lg shadow-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}"
-                                                    ${isEditing ? 'disabled' : ''}
-                                                    onclick="copyVersionCode('${project.id}', '${file.id}', '${v.id}')" title="Kopieer versiecode naar klembord">
-                                                <i class="fas fa-copy"></i>
-                                            </button>
-
-                                            <!-- VERSIE DOWNLOAD KNOP -->
-                                            <button class="text-xs text-gray-300 hover:text-white bg-gray-600 hover:bg-gray-700 font-medium py-1 px-2 rounded-lg shadow-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}"
-                                                    ${isEditing ? 'disabled' : ''}
-                                                    onclick="downloadVersion('${project.id}', '${file.id}', '${v.id}', '${file.name}')" 
-                                                    title="Download deze versie van de code">
-                                                <i class="fas fa-download"></i>
-                                            </button>
-                                            
-                                            <div class="flex items-center" onclick="event.stopPropagation()">
-                                                <input type="checkbox" id="stable-${v.id}" class="h-4 w-4 rounded focus:ring-green-500 bg-gray-600 border-gray-600 checked:text-green-600 ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}"
-                                                    ${v.isStable ? 'checked' : ''}
-                                                    ${isEditing ? 'disabled' : ''}
-                                                    onclick="toggleVersionLabel('${project.id}', '${file.id}', '${v.id}', 'isStable')">
-                                                <label for="stable-${v.id}" class="ml-1 text-sm text-green-600 select-none font-medium ${isEditing ? 'opacity-50' : ''}">Stable</label>
-                                            </div>
-                                            
-                                        </div>
-                                        ${isEditing ? 
-                                            `<button class="text-red-500 hover:text-red-400" onclick="deleteVersion('${project.id}', '${file.id}', '${v.id}')" title="Verwijder versie">
-                                                <i class="fas fa-trash-alt"></i>
-                                            </button>` 
-                                            : ''}
-                                    </div>
-                                `;
-                                versionListContainer.appendChild(versionItem);
-                            });
-                        }
-                        fileListContainer.appendChild(versionListContainer);
-                    });
-                }
-                historyContainer.appendChild(fileListContainer);
-            });
-        }
-
-
-        // --- TOAST/MELDING FUNCTIE ---
-
-        /**
-         * Toont een tijdelijke melding.
-         */
-        function showToast(message, bgColor) {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = `fixed bottom-5 right-5 p-4 rounded-lg text-white shadow-xl transition-opacity duration-300 z-50 ${bgColor}`;
-            toast.style.opacity = '1';
-
-            setTimeout(() => {
-                toast.style.opacity = '0';
-            }, 3000);
-        }
-
-        // Initialiseer bij het laden van de pagina
-        document.addEventListener('DOMContentLoaded', () => {
-            // Initialiseer Ace Editor
-            editor = ace.edit("editor");
-            editor.setTheme("ace/theme/tomorrow_night_eighties"); // Donker thema
-            editor.session.setMode("ace/mode/text"); // Standaardmodus
-            editor.setOptions({
-                fontSize: "14px", // Kleinere lettergrootte om het veld goed te vullen
-                showPrintMargin: false,
-                useWorker: false 
-            });
-            editor.container.style.lineHeight = "1.5"; // Lijnhoogte aanpassen
-
-
-            const importInput = document.getElementById('importFile');
-            if (importInput) {
-                importInput.addEventListener('change', handleImport);
-            }
-            loadActiveFile(); // Laadt de actieve file code EN rendert de geschiedenis
-            document.getElementById('storage-info').textContent = 'Opslag: Local Storage (Browser)';
-            
-            // Event listener voor de zoekbalk
-            document.getElementById('search-input').addEventListener('input', (e) => {
-                searchTerm = e.target.value.toLowerCase();
-                renderVersionHistory(getAllProjects());
-            });
-        });
-
-        // Bind de opslagfuncties aan de knoppen
-        window.saveNewProject = saveNewProject;
-        window.saveMajorVersion = saveMajorVersion;
-        window.saveMinorVersion = saveMinorVersion;
     </script>
 
     <style>
-        /* Aangepaste scrollbar voor een donker thema */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #2d3748; /* dark gray */
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #4a5568; /* slightly lighter dark gray */
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #718096; /* light gray */
-        }
-
-        /* Styling voor de Ace Editor container (vervangt textarea) */
-        #editor {
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 14px;
-            /* Ace Editor beheert de hoogte en overflow */
-            width: 100%; 
-            height: 100%;
-            border: 1px solid #4a5568; /* Border van de textarea behouden */
-            border-radius: 0.5rem; /* rounded-lg */
-        }
-        
-        /* Zorgt ervoor dat de Ace Editor de donkere achtergrond van de container overneemt */
-        .ace_editor {
-            background-color: #1a202c !important; /* bg-gray-900 */
-            color: #68d391 !important; /* text-green-300 */
-        }
-        
-        /* De rand van de editor container om de Ace Editor heen */
-        .editor-container {
-             border-radius: 0.5rem; /* rounded-lg */
-             overflow: hidden; /* Om te zorgen dat de Ace Editor niet over de rand gaat */
-        }
+        body { background-color: #0f172a; color: #e2e8f0; font-family: 'Inter', sans-serif; overflow: hidden; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        #editor { font-family: 'JetBrains Mono', monospace; width: 100%; height: 100%; }
+        .ace_editor { background-color: #0f172a !important; color: #e2e8f0 !important; }
+        .ace_gutter { background-color: #1e293b !important; color: #64748b !important; border-right: 1px solid #334155 !important; }
+        .ace_cursor { color: #6366f1 !important; }
+        .fade-in { animation: fadeIn 0.2s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 
-<body class="bg-gray-900 text-gray-100 min-h-screen">
+<body class="flex h-screen w-screen">
 
-    <!-- Confirmation Modal (Vervangt alle confirm/alert) -->
-    <div id="confirmation-modal" class="fixed inset-0 bg-black bg-opacity-75 hidden z-50 overflow-y-auto">
-        <div class="flex items-center justify-center min-h-screen p-4">
-            <div class="bg-gray-700 rounded-lg shadow-2xl w-full max-w-md">
-                <div class="p-4 border-b border-gray-600">
-                    <h3 id="conf-title" class="text-xl font-bold text-yellow-400">Bevestiging</h3>
-                </div>
-                <div class="p-4">
-                    <p id="conf-message" class="text-gray-200 mb-6"></p>
-                    <div class="flex justify-end space-x-3">
-                        <button onclick="window.handleCancel()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-white font-medium">
-                            Annuleer
+    <aside class="flex flex-col w-72 h-full bg-dark_paper border-r border-dark_border flex-shrink-0 z-20 transition-all duration-300 relative" id="sidebar">
+        <div class="p-4 border-b border-dark_border flex items-center gap-3">
+            <div class="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center text-white shadow-lg">
+                <i data-lucide="git-branch" width="18"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-sm text-white">Code Repo</h1>
+                <p class="text-[10px] text-slate-400">Versiebeheer</p>
+            </div>
+        </div>
+
+        <div class="p-3 border-b border-dark_border bg-dark_paper space-y-2">
+            <div class="relative">
+                <i data-lucide="search" class="absolute left-3 top-2.5 text-slate-500" width="14"></i>
+                <input type="text" id="search-input" placeholder="Zoeken..." class="w-full bg-dark border border-dark_border text-slate-300 text-xs rounded-md pl-9 pr-2 py-2 focus:outline-none focus:border-primary">
+            </div>
+            <div class="flex gap-2">
+                 <button onclick="window.saveNewProject()" class="flex-1 bg-primary hover:bg-primary_hover text-white text-xs py-1.5 px-2 rounded transition-colors flex items-center justify-center gap-1 font-medium">
+                    <i data-lucide="plus" width="12"></i> Project
+                </button>
+                <button onclick="window.toggleEditMode()" id="edit-mode-btn" class="bg-dark border border-dark_border hover:bg-slate-700 text-slate-400 text-xs py-1.5 px-2 rounded" title="Beheer Modus">
+                    <i data-lucide="settings-2" width="14"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-2">
+            <ul id="sidebar-list" class="space-y-1"></ul>
+        </div>
+
+        <div class="p-3 border-t border-dark_border text-[10px] text-slate-500 flex justify-between items-center bg-dark_paper">
+            <span>Local Storage</span>
+            <div class="flex gap-2">
+                <button onclick="window.exportData()" class="hover:text-white" title="Export JSON"><i data-lucide="download" width="12"></i></button>
+                <button onclick="window.triggerImport()" class="hover:text-white" title="Import JSON"><i data-lucide="upload" width="12"></i></button>
+            </div>
+            <input type="file" id="importFile" accept=".json" class="hidden">
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-full bg-dark relative min-w-0">
+        <div class="h-14 border-b border-dark_border bg-dark_paper flex items-center justify-between px-4 flex-shrink-0">
+            <div class="flex items-center gap-2 overflow-hidden">
+                <i data-lucide="file-code" class="text-primary flex-shrink-0" width="18"></i>
+                <span id="editor-title-status" class="text-sm font-medium text-slate-200 truncate">Geen bestand geselecteerd</span>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                
+                <button id="btn-save-pending" onclick="window.commitPendingVersion()" class="hidden animate-pulse bg-green-600 hover:bg-green-500 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-lg shadow-green-900/20 flex items-center gap-2 mr-4 transition-all">
+                    <i data-lucide="save" width="14"></i> WIJZIGINGEN OPSLAAN
+                </button>
+
+                <div id="action-group-normal" class="flex items-center gap-2">
+                    <div class="flex bg-dark rounded-lg p-1 border border-dark_border">
+                        <button onclick="window.initiateNewVersion('major')" class="p-1.5 hover:bg-slate-700 rounded text-green-400 transition-colors tooltip" title="Start nieuwe Major versie (Maakt editor leeg)">
+                            <span class="text-xs font-bold px-1">Major++</span>
                         </button>
-                        <button onclick="window.handleConfirm()" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white font-medium">
-                            Bevestig
+                        <div class="w-px bg-dark_border my-1"></div>
+                        <button onclick="window.initiateNewVersion('minor')" class="p-1.5 hover:bg-slate-700 rounded text-blue-400 transition-colors tooltip" title="Start nieuwe Minor versie (Maakt editor leeg)">
+                            <span class="text-xs font-bold px-1">Minor++</span>
                         </button>
                     </div>
+
+                    <div class="h-4 w-px bg-dark_border mx-1"></div>
+
+                    <button onclick="window.createNewFile()" class="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors" title="Nieuw Bestand">
+                        <i data-lucide="file-plus" width="18"></i>
+                    </button>
+                    <button onclick="window.pushToGitHub()" class="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors" title="GitHub Info">
+                        <i data-lucide="github" width="18"></i>
+                    </button>
+                    <button onclick="window.copyCodeToClipboard()" class="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors" title="Kopieer">
+                        <i data-lucide="copy" width="18"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-1 relative">
+            <div id="editor"></div>
+        </div>
+    </main>
+
+    <div id="toast" class="fixed bottom-6 right-6 px-4 py-3 rounded-xl shadow-2xl text-white text-sm font-medium flex items-center gap-3 backdrop-blur-md border border-white/10 opacity-0 pointer-events-none transition-all duration-300 z-50 translate-y-2"></div>
+
+    <div id="history-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-dark_paper border border-dark_border w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden fade-in flex flex-col max-h-[85vh]">
+            <div class="p-4 border-b border-dark_border flex justify-between items-center bg-dark/50">
+                <div>
+                    <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i data-lucide="history" width="20" class="text-primary"></i> Versie Geschiedenis
+                    </h3>
+                    <p id="history-modal-subtitle" class="text-xs text-slate-400 mt-0.5"></p>
+                </div>
+                <button onclick="document.getElementById('history-modal').classList.add('hidden')" class="text-slate-400 hover:text-white"><i data-lucide="x" width="20"></i></button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-2 bg-dark" id="history-list-container">
+                </div>
+        </div>
+    </div>
+
+    <div id="github-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-dark_paper border border-dark_border w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] fade-in">
+            <div class="p-4 border-b border-dark_border flex justify-between items-center bg-dark/30">
+                <h3 class="text-lg font-bold text-white">GitHub Push Helper</h3>
+                <button onclick="window.closeGitModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" width="20"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-6">
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div><p class="text-xs text-slate-500 font-bold">PROJECT</p><p id="git-project-name" class="text-slate-200"></p></div>
+                    <div><p class="text-xs text-slate-500 font-bold">BESTAND</p><p id="git-file-name" class="text-slate-200"></p></div>
+                    <div class="col-span-2"><p class="text-xs text-slate-500 font-bold">TARGET</p><p id="git-repo-url" class="text-blue-400 truncate"></p></div>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500 font-bold mb-1">COMMIT MESSAGE</p>
+                    <div class="flex gap-2"><input id="git-commit-message" readonly class="flex-1 bg-dark border border-dark_border rounded px-3 py-2 text-sm text-slate-300"><button id="git-copy-msg" class="p-2 bg-slate-700 rounded text-white"><i data-lucide="copy" width="14"></i></button></div>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500 font-bold mb-1">CODE</p>
+                    <div class="relative"><pre id="git-code-content" class="h-32 bg-dark border border-dark_border rounded p-3 text-xs text-slate-400 overflow-auto"></pre><button id="git-copy-code" class="absolute top-2 right-2 bg-primary text-white text-xs px-2 py-1 rounded">Kopieer</button></div>
                 </div>
             </div>
         </div>
     </div>
-    
-    <!-- GitHub Push Modal (Nieuwe Eis) -->
-    <div id="github-modal" class="fixed inset-0 bg-black bg-opacity-75 hidden z-50 overflow-y-auto">
-        <div class="flex items-center justify-center min-h-screen p-4">
-            <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-3xl">
-                <div class="p-4 border-b border-gray-700 flex justify-between items-center">
-                    <h3 class="text-2xl font-bold text-blue-400">Push naar GitHub Instructies</h3>
-                    <button onclick="window.closeGitModal()" class="text-gray-400 hover:text-white p-2">
-                        <i class="fas fa-times text-xl"></i>
-                    </button>
-                </div>
-                <div class="p-6 text-gray-200 space-y-4">
-                    <p class="text-yellow-400">
-                        **BELANGRIJK:** Deze app draait in je browser en kan **niet** direct code naar GitHub pushen. Gebruik de onderstaande informatie om de push handmatig uit te voeren met een Git-client (zoals de terminal of GitHub Desktop).
-                    </p>
-                    
-                    <div class="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                            <p class="font-semibold text-gray-400">Project:</p>
-                            <p id="git-project-name" class="font-medium"></p>
-                        </div>
-                        <div>
-                            <p class="font-semibold text-gray-400">Bestandsnaam:</p>
-                            <p id="git-file-name" class="font-medium"></p>
-                        </div>
-                        <div class="col-span-2">
-                            <p class="font-semibold text-gray-400">Repository URL:</p>
-                            <p id="git-repo-url" class="font-medium text-blue-300 truncate"></p>
-                        </div>
-                        <div>
-                            <p class="font-semibold text-gray-400">Target Branch:</p>
-                            <p id="git-branch" class="font-medium text-yellow-300"></p>
-                        </div>
-                        <div>
-                            <p class="font-semibold text-gray-400">Huidige Versie:</p>
-                            <p id="git-version" class="font-medium text-green-300"></p>
-                        </div>
-                    </div>
-                    
-                    <h4 class="font-semibold text-gray-300 mt-4 border-b border-gray-700 pb-1">Commit Bericht</h4>
-                    <div class="flex items-center space-x-2">
-                        <input type="text" id="git-commit-message" class="flex-1 p-2 bg-gray-900 border border-gray-700 rounded text-sm text-gray-100" readonly>
-                        <button id="git-copy-message-button" class="p-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-white text-sm" title="Kopieer bericht">
-                             <i class="fas fa-copy"></i>
-                        </button>
-                    </div>
 
-                    <h4 class="font-semibold text-gray-300 mt-4 border-b border-gray-700 pb-1">Code Inhoud</h4>
-                    <pre id="git-code-content" class="h-40 p-3 bg-gray-900 border border-gray-700 rounded text-sm overflow-auto text-green-300"></pre>
-                    <div class="flex justify-end">
-                        <button id="git-copy-code-button" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white font-medium" title="Kopieer code">
-                            Kopieer Code Naar Klembord
-                        </button>
-                    </div>
+    <script type="module">
+        const STORAGE_KEY_PROJECTS = 'code_projects_v8'; 
+        const STORAGE_KEY_ACTIVE_PROJECT = 'active_project_id_v8';
+        const STORAGE_KEY_ACTIVE_FILE = 'active_file_id_v8';
 
-                </div>
-            </div>
-        </div>
-    </div>
+        let activeProjectId = localStorage.getItem(STORAGE_KEY_ACTIVE_PROJECT) || null;
+        let activeFileId = localStorage.getItem(STORAGE_KEY_ACTIVE_FILE) || null;
+        let expandedProjectId = activeProjectId; 
+        
+        let pendingVersionType = null; // 'major' or 'minor'
+        let isEditing = false;
+        let searchTerm = '';
+        let editor;
 
+        // --- CORE UTILS ---
+        const generateId = () => Math.random().toString(36).substring(2, 9);
+        const countLines = (code) => code.split('\n').length;
+        const formatTime = (ts) => new Date(ts).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' });
+        
+        function getAllProjects() { return JSON.parse(localStorage.getItem(STORAGE_KEY_PROJECTS) || '[]'); }
+        function saveAllProjects(data) { localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(data)); }
+        function getProjectById(id) { return getAllProjects().find(p => p.id === id); }
+        function getFileById(pId, fId) { const p = getProjectById(pId); return p ? p.files.find(f => f.id === fId) : null; }
 
-    <div class="flex flex-col md:flex-row h-screen">
+        // --- NEW WORKFLOW LOGIC ---
 
-        <!-- Linkerpaneel: Code Editor -->
-        <main class="flex-1 flex flex-col p-4 bg-gray-800 shadow-lg md:overflow-y-auto">
-            <!-- Header met Titel, Status en Nieuwe Klembord Knop -->
-            <div class="flex justify-between items-center mb-4">
-                <h1 class="text-3xl font-bold text-green-400 flex items-baseline">
-                    Code-editor 
-                    <span id="editor-title-status" class="text-base font-normal ml-2 text-green-400"> (Geen actief project)</span>
-                </h1>
-                <!-- Icoonknoppen: Kopiëren en Wissen -->
-                <div class="flex space-x-2">
-                    <!-- Push naar GitHub Knop (NIEUW) -->
-                    <button onclick="window.pushToGitHub()" title="Push Code naar GitHub"
-                            class="p-2 text-blue-400 hover:text-blue-300 bg-gray-700 hover:bg-gray-600 rounded-lg transition duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <i class="fab fa-github text-xl"></i>
-                    </button>
-                    <!-- Klembord Knop -->
-                    <button onclick="window.copyCodeToClipboard()" title="Kopieer inhoud naar klembord"
-                            class="p-2 text-gray-400 hover:text-green-400 bg-gray-700 hover:bg-gray-600 rounded-lg transition duration-150 focus:outline-none focus:ring-2 focus:ring-green-500">
-                        <i class="fas fa-clipboard text-xl"></i>
-                    </button>
-                    <!-- Wis Editor Knop -->
-                    <button onclick="window.clearEditor()" title="Wis Editor Inhoud"
-                            class="p-2 text-red-400 hover:text-red-300 bg-gray-700 hover:bg-gray-600 rounded-lg transition duration-150 focus:outline-none focus:ring-2 focus:ring-red-500">
-                        <i class="fas fa-eraser text-xl"></i>
-                    </button>
-                </div>
-            </div>
+        // 1. Start proces: Editor leegmaken, klaar voor plakken
+        window.initiateNewVersion = (type) => {
+            if (!activeFileId) return showToast("Selecteer eerst een bestand.", 'error');
             
-            <div class="flex-1 relative editor-container">
-                <!-- ACE EDITOR CONTAINER (vervangt textarea) -->
-                <div id="editor">
-/*
-  Welkom bij je Code Versiebeheer App!
-  Dit is de plek waar je je code schrijft.
-  Sla een versie op om een momentopname te maken in de geschiedenis.
-*/
-function greet(name) {
-    console.log("Hallo, " + name + "!");
-}
+            // Bevestiging als er iets in staat
+            if (editor.getValue().trim() !== '') {
+                if(!confirm("De editor wordt leeggemaakt zodat je de nieuwe versie kunt plakken/typen. Doorgaan?")) return;
+            }
 
-greet("Wereld");
-                </div>
-            </div>
+            pendingVersionType = type;
+            editor.setValue("", -1);
+            editor.focus();
 
-            <div class="mt-4 flex justify-between items-center">
-                <div class="flex space-x-4">
-                    <button id="new-file-button"
-                            onclick="window.saveNewProject()"
-                            class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-xl transform hover:scale-[1.02] transition duration-200 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50">
-                        Nieuw Project Opslaan
-                    </button>
-                    
-                    <button id="increment-major-button"
-                            onclick="window.saveMajorVersion()"
-                            class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-xl transform hover:scale-[1.02] transition duration-200 focus:outline-none focus:ring-4 focus:ring-green-500 focus:ring-opacity-50">
-                        Versie Ophogen (Major)
-                    </button>
-
-                    <button id="increment-minor-button"
-                            onclick="window.saveMinorVersion()"
-                            class="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg shadow-xl transform hover:scale-[1.02] transition duration-200 focus:outline-none focus:ring-4 focus:ring-teal-500 focus:ring-opacity-50">
-                        Subversie Ophogen (Minor)
-                    </button>
-
-                    <button id="new-file-button-in-branch"
-                            onclick="window.createNewFile()"
-                            class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-xl transform hover:scale-[1.02] transition duration-200 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50">
-                        Nieuw Bestand Maken
-                    </button>
-                </div>
-                
-                <!-- Export/Import Knoppen en Storage Info -->
-                <div class="flex items-center space-x-4">
-                    <button onclick="window.exportData()"
-                            class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg shadow-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500">
-                        Exporteer (JSON)
-                    </button>
-                    
-                    <input type="file" id="importFile" accept=".json" class="hidden">
-                    <button onclick="window.triggerImport()"
-                            class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg shadow-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500">
-                        Importeer (JSON)
-                    </button>
-
-                    <div id="storage-info" class="text-xs text-gray-400 truncate ml-4">Opslag: Initialiseren...</div>
-                </div>
-            </div>
-        </main>
-
-        <!-- Rechterpaneel: History -->
-        <aside class="w-full md:w-80 flex flex-col bg-gray-800 border-l border-gray-700">
-            <div class="flex flex-col p-4 bg-gray-900 border-b border-gray-700 sticky top-0 z-10">
-                <div class="flex justify-between items-center mb-2">
-                    <h2 class="text-xl font-bold text-yellow-400">History</h2>
-                    <button id="edit-mode-button"
-                            onclick="window.toggleEditMode()"
-                            class="text-xs bg-gray-600 hover:bg-gray-700 text-white font-medium py-0.5 px-2 rounded-lg shadow-md transition duration-200">
-                        Bewerk Modus (Uit)
-                    </button>
-                </div>
-                
-                <!-- Zoekbalk -->
-                <input type="text" id="search-input" placeholder="Zoek project, bestand of versie..."
-                       class="w-full p-2 text-sm bg-gray-800 text-gray-200 border border-gray-600 rounded-lg focus:ring-yellow-500 focus:border-yellow-500 outline-none">
-            </div>
+            // UI Update
+            const typeLabel = type === 'major' ? 'MAJOR' : 'MINOR';
+            document.getElementById('btn-save-pending').classList.remove('hidden');
+            document.getElementById('btn-save-pending').innerHTML = `<i data-lucide="save" width="14"></i> OPSLAAN (${typeLabel})`;
+            document.getElementById('action-group-normal').classList.add('opacity-50', 'pointer-events-none');
             
-            <ul id="version-history" class="overflow-y-auto flex-1 divide-y divide-gray-700">
-                <!-- Projecten, Bestanden en versies worden hier dynamisch geladen -->
-                <p class="p-4 text-gray-400 text-sm">Projecten worden geladen...</p>
-            </ul>
-        </aside>
-    </div>
-    
-    <!-- Toast Melding -->
-    <div id="toast" style="opacity: 0;" class="fixed bottom-5 right-5 p-4 rounded-lg text-white shadow-xl transition-opacity duration-300 z-50 bg-gray-700">
-        Melding
-    </div>
+            lucide.createIcons();
+            showToast(`Editor is leeg. Plak je nieuwe ${typeLabel} code en klik op OPSLAAN.`, 'info');
+        };
+
+        // 2. Opslaan knop geklikt: Versie berekenen en opslaan
+        window.commitPendingVersion = () => {
+            const content = editor.getValue();
+            if(!content.trim()) return showToast("Kan geen lege versie opslaan.", 'error');
+
+            const projects = getAllProjects();
+            const p = projects.find(p => p.id === activeProjectId);
+            const f = p?.files.find(f => f.id === activeFileId);
+            if(!f) return;
+
+            const latest = f.versions[0];
+            let maj = 1, min = 0;
+            if (latest) {
+                maj = pendingVersionType === 'major' ? latest.major + 1 : latest.major;
+                min = pendingVersionType === 'major' ? 0 : latest.minor + 1;
+            }
+
+            // Notitie (optioneel, vooral bij Major)
+            let note = null;
+            if (pendingVersionType === 'major') {
+                note = prompt(`Notitie voor Versie ${maj}.${min}:`, "Nieuwe update");
+                if(note === null) return; // Cancel
+            }
+
+            const newVersion = {
+                id: generateId(),
+                code: content,
+                timestamp: Date.now(),
+                major: maj, minor: min,
+                name: `v${maj}.${min}`,
+                note: note,
+                isStable: pendingVersionType === 'major',
+                lineCount: countLines(content)
+            };
+
+            f.versions.unshift(newVersion);
+            saveAllProjects(projects);
+
+            // Reset UI
+            pendingVersionType = null;
+            document.getElementById('btn-save-pending').classList.add('hidden');
+            document.getElementById('action-group-normal').classList.remove('opacity-50', 'pointer-events-none');
+
+            renderSidebar(projects);
+            loadActiveFile(); // Update titel en UI
+            showToast(`Versie ${newVersion.name} succesvol opgeslagen!`, 'success');
+        };
+
+
+        // --- EDITOR & UI ---
+        function loadActiveFile() {
+            const file = getFileById(activeProjectId, activeFileId);
+            const project = getProjectById(activeProjectId);
+            const titleEl = document.getElementById('editor-title-status');
+            
+            // Reset pending state if switching files
+            pendingVersionType = null;
+            document.getElementById('btn-save-pending').classList.add('hidden');
+            document.getElementById('action-group-normal').classList.remove('opacity-50', 'pointer-events-none');
+
+            if (file && project) {
+                const ext = file.name.split('.').pop().toLowerCase();
+                const modeMap = { js:'javascript', html:'html', css:'css', py:'python', json:'json' };
+                editor.session.setMode(`ace/mode/${modeMap[ext] || 'text'}`);
+
+                // Als er geen pending actie is, laad de laatste versie
+                if (file.versions.length > 0) {
+                    const latest = file.versions[0];
+                    editor.setValue(latest.code, -1);
+                    titleEl.innerHTML = `<span class="text-slate-400">${project.name} / </span><span class="text-white">${file.name}</span> <span class="ml-2 text-xs bg-dark_border px-1.5 py-0.5 rounded text-success">${latest.name}</span>`;
+                } else {
+                    editor.setValue("/* Nieuw bestand. Plak hier code en sla een versie op. */", -1);
+                    titleEl.innerHTML = `<span class="text-slate-400">${project.name} / </span><span class="text-white">${file.name}</span>`;
+                }
+            } else {
+                editor.setValue("/* Selecteer een project of maak een nieuwe aan. */", -1);
+                titleEl.textContent = "Geen bestand geselecteerd";
+            }
+            renderSidebar(getAllProjects());
+            lucide.createIcons();
+        }
+
+        // --- SIDEBAR ---
+        function renderSidebar(projects) {
+            const container = document.getElementById('sidebar-list');
+            container.innerHTML = '';
+            
+            const filtered = projects.filter(p => p.name.toLowerCase().includes(searchTerm) || p.files.some(f => f.name.toLowerCase().includes(searchTerm)));
+
+            if(filtered.length === 0) {
+                container.innerHTML = `<li class="text-center text-xs text-slate-500 py-4">Geen resultaten</li>`;
+                return;
+            }
+
+            filtered.forEach(p => {
+                const isExpanded = p.id === expandedProjectId;
+                const isActiveP = p.id === activeProjectId;
+
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <div class="flex items-center justify-between px-3 py-2 rounded-md cursor-pointer mb-1 transition-colors ${isActiveP ? 'bg-slate-800' : 'hover:bg-slate-800/50'}" onclick="window.toggleProject('${p.id}')">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <i data-lucide="${isExpanded ? 'folder-open' : 'folder'}" class="${isActiveP ? 'text-primary' : 'text-slate-400'}" width="14"></i>
+                            <span class="text-xs font-bold ${isActiveP ? 'text-white' : 'text-slate-300'} truncate">${p.name}</span>
+                        </div>
+                        ${isEditing ? 
+                            `<button class="p-1 hover:text-red-400 text-slate-500" onclick="window.deleteProject(event, '${p.id}')"><i data-lucide="trash" width="12"></i></button>` : 
+                            `<i data-lucide="chevron-down" class="text-slate-600 transition-transform ${isExpanded ? 'rotate-180' : ''}" width="12"></i>`
+                        }
+                    </div>
+                `;
+
+                if(isExpanded) {
+                    const fileUl = document.createElement('ul');
+                    fileUl.className = "pl-3 border-l border-dark_border ml-3 mb-2 space-y-0.5";
+                    
+                    if(p.files.length === 0) fileUl.innerHTML = `<li class="px-2 py-1 text-[10px] text-slate-500 italic">Geen bestanden</li>`;
+
+                    p.files.forEach(f => {
+                        const isActiveF = f.id === activeFileId && isActiveP;
+                        const latestVer = f.versions.length > 0 ? f.versions[0].name : '-';
+                        
+                        const fLi = document.createElement('li');
+                        fLi.className = `flex items-center justify-between group px-2 py-1.5 rounded cursor-pointer ${isActiveF ? 'bg-primary/20' : 'hover:bg-slate-800'}`;
+                        fLi.onclick = () => window.setActiveItem(p.id, f.id);
+
+                        fLi.innerHTML = `
+                            <div class="flex items-center gap-2 truncate flex-1">
+                                <i data-lucide="file-code" width="13" class="${isActiveF ? 'text-primary' : 'text-slate-500'}"></i>
+                                <span class="text-xs ${isActiveF ? 'text-white font-medium' : 'text-slate-400'} truncate">${f.name}</span>
+                                <span class="text-[10px] text-slate-500 bg-dark_border px-1 rounded ml-1">${latestVer}</span>
+                            </div>
+                            <div class="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                ${isEditing ? 
+                                    `<button class="p-1 hover:text-red-400 text-slate-500" onclick="window.deleteFile(event, '${p.id}', '${f.id}')"><i data-lucide="trash" width="12"></i></button>` :
+                                    `<button class="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white" title="Geschiedenis" onclick="window.openHistoryModal(event, '${p.id}', '${f.id}')">
+                                        <i data-lucide="history" width="12"></i>
+                                    </button>`
+                                }
+                            </div>
+                        `;
+                        fileUl.appendChild(fLi);
+                    });
+                    li.appendChild(fileUl);
+                }
+                container.appendChild(li);
+            });
+            lucide.createIcons();
+        }
+
+        // --- HISTORY MODAL ---
+        window.openHistoryModal = (e, pId, fId) => {
+            if(e) e.stopPropagation();
+            const f = getFileById(pId, fId);
+            const p = getProjectById(pId);
+            if(!f) return;
+
+            document.getElementById('history-modal-subtitle').textContent = `${p.name} / ${f.name}`;
+            const listContainer = document.getElementById('history-list-container');
+            listContainer.innerHTML = '';
+
+            if(f.versions.length === 0) {
+                listContainer.innerHTML = `<div class="text-center text-slate-500 py-10">Geen geschiedenis beschikbaar.</div>`;
+            } else {
+                f.versions.forEach((v, index) => {
+                    const item = document.createElement('div');
+                    item.className = "flex items-start justify-between p-3 border-b border-dark_border hover:bg-slate-800/50 transition-colors group";
+                    item.innerHTML = `
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono font-bold text-sm ${v.isStable ? 'text-green-400' : 'text-blue-400'}">${v.name}</span>
+                                <span class="text-xs text-slate-500">${formatTime(v.timestamp)}</span>
+                                ${index === 0 ? '<span class="text-[10px] bg-primary/20 text-primary px-1 rounded">Huidig</span>' : ''}
+                            </div>
+                            ${v.note ? `<p class="text-xs text-slate-400 mt-1 italic">"${v.note}"</p>` : ''}
+                            <p class="text-[10px] text-slate-600 mt-1">${v.lineCount} regels</p>
+                        </div>
+                        <button onclick="window.loadVersionFromHistory('${pId}', '${fId}', '${v.id}')" class="px-3 py-1.5 bg-dark_border hover:bg-slate-600 text-slate-300 text-xs rounded transition-colors flex items-center gap-2">
+                            <i data-lucide="rotate-ccw" width="12"></i> Laad Code
+                        </button>
+                    `;
+                    listContainer.appendChild(item);
+                });
+            }
+
+            document.getElementById('history-modal').classList.remove('hidden');
+            lucide.createIcons();
+        };
+
+        window.loadVersionFromHistory = (pId, fId, vId) => {
+            const f = getFileById(pId, fId);
+            const v = f.versions.find(ver => ver.id === vId);
+            if(v) {
+                window.setActiveItem(pId, fId); // Zorg dat het bestand actief wordt
+                editor.setValue(v.code, -1);
+                document.getElementById('history-modal').classList.add('hidden');
+                
+                // Update titel om aan te geven dat we een oude versie kijken
+                const titleEl = document.getElementById('editor-title-status');
+                titleEl.innerHTML += ` <span class="ml-2 text-xs bg-yellow-500/20 text-yellow-500 px-1.5 py-0.5 rounded border border-yellow-500/30">Geladen: ${v.name}</span>`;
+                
+                showToast(`Versie ${v.name} in editor geladen.`, 'info');
+            }
+        };
+
+        // --- GLOBAL ACTIONS ---
+        window.saveNewProject = () => {
+            const content = editor.getValue();
+            if(!content.trim()) return showToast("Editor is leeg.", 'error');
+            const name = prompt("Projectnaam:"); if(!name) return;
+            const fileName = prompt("Bestandsnaam (bv: index.js):", "index.js"); if(!fileName) return;
+
+            const pId = generateId(); const fId = generateId();
+            const newVer = { id: generateId(), code: content, timestamp: Date.now(), major: 1, minor: 0, name: "v1.0", note: "Start", isStable: true, lineCount: countLines(content) };
+            
+            const projects = getAllProjects();
+            projects.unshift({ id: pId, name: name, files: [{ id: fId, name: fileName, versions: [newVer] }] });
+            saveAllProjects(projects);
+            window.setActiveItem(pId, fId);
+            showToast("Project aangemaakt!", 'success');
+        };
+
+        window.createNewFile = () => {
+            if(!activeProjectId) return showToast("Geen project geselecteerd", 'error');
+            const name = prompt("Bestandsnaam:"); if(!name) return;
+            const projects = getAllProjects();
+            projects.find(p => p.id === activeProjectId).files.push({ id: generateId(), name: name, versions: [] });
+            saveAllProjects(projects);
+            renderSidebar(projects);
+            showToast("Bestand aangemaakt", 'success');
+        };
+
+        window.setActiveItem = (pId, fId) => {
+            activeProjectId = pId; activeFileId = fId;
+            localStorage.setItem(STORAGE_KEY_ACTIVE_PROJECT, pId);
+            localStorage.setItem(STORAGE_KEY_ACTIVE_FILE, fId);
+            loadActiveFile();
+        };
+
+        window.toggleProject = (id) => { expandedProjectId = expandedProjectId === id ? null : id; renderSidebar(getAllProjects()); };
+        window.toggleEditMode = () => { isEditing = !isEditing; document.getElementById('edit-mode-btn').classList.toggle('bg-primary'); renderSidebar(getAllProjects()); };
+        
+        window.deleteProject = (e, id) => { 
+            e.stopPropagation(); 
+            if(confirm("Project verwijderen?")) { 
+                saveAllProjects(getAllProjects().filter(p => p.id !== id)); 
+                if(activeProjectId === id) { activeProjectId=null; loadActiveFile(); } 
+                else renderSidebar(getAllProjects()); 
+            } 
+        };
+        window.deleteFile = (e, pId, fId) => {
+            e.stopPropagation();
+            if(confirm("Bestand verwijderen?")) {
+                const all = getAllProjects();
+                const p = all.find(p => p.id === pId);
+                p.files = p.files.filter(f => f.id !== fId);
+                saveAllProjects(all);
+                if(activeFileId === fId) { activeFileId=null; loadActiveFile(); }
+                else renderSidebar(all);
+            }
+        };
+
+        window.copyCodeToClipboard = () => { navigator.clipboard.writeText(editor.getValue()); showToast("Gekopieerd", 'success'); };
+        
+        function showToast(msg, type) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = `fixed bottom-6 right-6 px-4 py-3 rounded-xl shadow-2xl text-white text-sm font-medium transition-all duration-300 z-50 ${type==='error'?'bg-danger':(type==='success'?'bg-success':'bg-primary')}`;
+            t.style.opacity = '1'; t.style.transform = 'translateY(0)';
+            setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(10px)'; }, 3000);
+        }
+
+        // --- GITHUB MOCKUP ---
+        window.pushToGitHub = () => {
+            if (!activeFileId) return showToast("Geen bestand", 'error');
+            document.getElementById('github-modal').classList.remove('hidden');
+            const f = getFileById(activeProjectId, activeFileId);
+            document.getElementById('git-file-name').textContent = f.name;
+            document.getElementById('git-code-content').textContent = editor.getValue();
+            document.getElementById('git-copy-code').onclick = () => { navigator.clipboard.writeText(editor.getValue()); showToast("Code gekopieerd", 'success'); }
+        };
+        window.closeGitModal = () => document.getElementById('github-modal').classList.add('hidden');
+
+        // Export/Import
+        window.exportData = () => {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([JSON.stringify(getAllProjects(),null,2)], {type:'application/json'}));
+            a.download = 'backup.json'; a.click();
+        };
+        window.triggerImport = () => document.getElementById('importFile').click();
+        document.getElementById('importFile').onchange = (e) => {
+            const r = new FileReader();
+            r.onload = (ev) => { saveAllProjects(JSON.parse(ev.target.result)); loadActiveFile(); };
+            r.readAsText(e.target.files[0]);
+        };
+
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            editor = ace.edit("editor");
+            editor.setTheme("ace/theme/tomorrow_night_eighties");
+            editor.setOptions({ fontSize: "14px", showPrintMargin: false });
+            
+            loadActiveFile();
+            document.getElementById('search-input').addEventListener('input', (e) => { searchTerm = e.target.value.toLowerCase(); renderSidebar(getAllProjects()); });
+        });
+    </script>
 </body>
 </html>
