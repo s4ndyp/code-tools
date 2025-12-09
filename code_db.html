@@ -7,7 +7,9 @@
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    
     <script src="https://unpkg.com/lucide@latest"></script>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -84,17 +86,17 @@
             </div>
             
             <div class="flex gap-2">
-                <button onclick="window.saveNewProject()" class="w-1/4 bg-dark border border-dark_border hover:bg-slate-700 text-slate-400 hover:text-primary text-xs py-2 rounded transition-colors flex items-center justify-center" title="Nieuw Project">
-                    <i data-lucide="folder-plus" width="14"></i>
+                <button onclick="window.saveNewProject()" class="w-1/4 bg-dark border border-dark_border hover:bg-slate-700 text-slate-400 text-xs py-2 rounded transition-colors flex items-center justify-center" title="Nieuw Project">
+                    <i data-lucide="folder-plus" width="14" class="text-primary"></i>
                 </button>
-                <button onclick="window.createNewItem(false)" class="w-1/4 bg-dark border border-dark_border hover:bg-slate-700 text-slate-400 hover:text-primary text-xs py-2 rounded transition-colors flex items-center justify-center" title="Nieuw Bestand (in actieve map)">
-                    <i data-lucide="file-plus-2" width="14"></i>
+                <button onclick="window.createNewItem(false)" class="w-1/4 bg-dark border border-dark_border hover:bg-slate-700 text-slate-400 text-xs py-2 rounded transition-colors flex items-center justify-center" title="Nieuw Bestand (in actieve map)">
+                    <i data-lucide="file-plus-2" width="14" class="text-danger"></i>
                 </button>
-                 <button onclick="window.createNewItem(true)" class="w-1/4 bg-dark border border-dark_border hover:bg-slate-700 text-slate-400 hover:text-primary text-xs py-2 rounded transition-colors flex items-center justify-center" title="Nieuwe Submap (in actieve map)">
-                    <i data-lucide="folder-x" width="14"></i>
+                 <button onclick="window.createNewItem(true)" class="w-1/4 bg-dark border border-dark_border hover:bg-slate-700 text-slate-400 text-xs py-2 rounded transition-colors flex items-center justify-center" title="Nieuwe Submap (in actieve map)">
+                    <i data-lucide="folder-x" width="14" class="text-yellow-400"></i>
                 </button>
                 <button onclick="window.toggleEditMode()" id="edit-mode-btn" class="w-1/4 bg-dark border border-dark_border hover:bg-slate-700 text-slate-400 text-xs py-2 rounded transition-colors flex items-center justify-center" title="Beheer Modus">
-                    <i data-lucide="settings-2" width="14"></i>
+                    <i data-lucide="settings-2" width="14" class="text-success"></i>
                 </button>
             </div>
             <p id="active-container-info" class="text-[10px] text-slate-500 mt-1 pl-1 truncate">Actieve map: Project Root</p>
@@ -247,7 +249,6 @@
         function saveAllProjects(data) { localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(data)); }
         function getProjectById(id) { return getAllProjects().find(p => p.id === id); }
 
-        // NIEUWE HELPER: Zoek een container (Project of Map) op ID en retourneer het object
         function getContainerById(targetId, items) {
             if (!items) return null;
             for (const item of items) {
@@ -262,15 +263,12 @@
             return null;
         }
 
-        // NIEUWE HELPER: Zoek de 'files' array van de container met 'targetId'
         function findContainerArray(targetId, projects) {
             const project = projects.find(p => p.id === activeProjectId);
             if (!project) return null; 
 
-            // Als targetId = Project ID, retourneer de root files array
             if (targetId === activeProjectId) return project.files;
             
-            // Zoek recursief in submappen
             function findArray(items) {
                 if (!items) return null;
                 for (const item of items) {
@@ -287,7 +285,6 @@
             return findArray(project.files);
         }
 
-        // NIEUWE HELPER: Zoek een bestand (niet een map) op ID
         function getFileById(pId, fId) {
             const p = getProjectById(pId);
             if (!p) return null;
@@ -633,6 +630,8 @@
                 if (item.isFolder) {
                     // MAP WEERGAVE
                     const folderIsExpanded = expandedContainers.includes(item.id);
+                    // Kleurlogica: Root = Primary, Sub = Yellow
+                    const folderColor = (level === 0 && pId === item.id) ? 'text-primary' : 'text-yellow-400';
                     
                     const li = document.createElement('li');
                     li.className = "mb-0.5 relative";
@@ -644,7 +643,7 @@
                     
                     folderDiv.innerHTML = `
                         <div class="flex items-center gap-2 overflow-hidden">
-                            <i data-lucide="${folderIsExpanded ? 'folder-open' : 'folder'}" class="${isCurrentContainer ? 'text-primary' : 'text-slate-400'}" width="14"></i>
+                            <i data-lucide="${folderIsExpanded ? 'folder-open' : 'folder'}" class="${folderColor}" width="14"></i>
                             <span class="text-xs font-medium ${isCurrentContainer ? 'text-white' : 'text-slate-300'} truncate">${item.name}</span>
                         </div>
                         <i data-lucide="chevron-down" class="text-slate-600 transition-transform ${folderIsExpanded ? 'rotate-180' : ''}" width="12"></i>
@@ -682,7 +681,7 @@
                     
                     fLi.innerHTML = `
                         <div class="flex items-center gap-2 truncate flex-1">
-                            <i data-lucide="file-code" width="13" class="${isActiveF ? 'text-primary' : 'text-slate-500'}"></i>
+                            <i data-lucide="file-code" width="13" class="${isActiveF ? 'text-danger' : 'text-danger'}"></i>
                             <span class="text-xs ${isActiveF ? 'text-white font-medium' : 'text-slate-400'} truncate">${item.name}</span>
                             <span class="text-[10px] text-slate-500 bg-dark_border px-1 rounded ml-1">${latestVer}</span>
                         </div>
@@ -959,6 +958,10 @@
             editor = ace.edit("editor");
             editor.setTheme("ace/theme/tomorrow_night_eighties");
             editor.setOptions({ fontSize: "14px", showPrintMargin: false });
+            
+            // Zorg dat iconen ingeladen worden, ook als er nog geen projecten zijn
+            lucide.createIcons();
+            
             loadActiveFile();
             document.getElementById('search-input').addEventListener('input', (e) => { searchTerm = e.target.value.toLowerCase(); renderSidebar(getAllProjects()); });
         });
