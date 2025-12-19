@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="nl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Snippet Matcher & Replacer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Fira+Code:wght@400;500&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+
+        .highlight-match {
+            background-color: rgba(59, 130, 246, 0.25) !important;
+            border-left: 4px solid #3b82f6;
+            position: absolute;
+            z-index: 20;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ace_gutter {
+            background: #1e293b !important;
+            color: #64748b !important;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="h-14 flex items-center justify-between px-6 border-b border-slate-800 glass-panel shrink-0">
+        <div class="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+            <h1 class="text-lg font-semibold tracking-tight">Code <span class="text-blue-500">Match & Swap</span></h1>
+        </div>
+        <div class="flex gap-2">
+            <button id="findBtn" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 shadow-lg shadow-blue-900/20">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                Zoek Match
+            </button>
+            <button id="replaceBtn" disabled class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 shadow-lg shadow-emerald-900/20">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l5 5-5 5"/><path d="M13 7l5 5-5 5"/></svg>
+                Vervang & Voeg toe
+            </button>
+            <button id="undoBtn" disabled class="bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                Herstel
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- Left Column: Source Code -->
+        <div class="flex-1 flex flex-col border-r border-slate-800 p-4 min-w-0">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Hoofdbestand (Source)</span>
+                <span id="lineCount" class="text-xs text-slate-500"></span>
+            </div>
+            <div id="sourceEditorContainer" class="flex-1 bg-slate-950 rounded-lg border border-slate-800 overflow-hidden relative shadow-inner">
+                <textarea id="sourceEditor" class="hidden"></textarea>
+            </div>
+        </div>
+
+        <!-- Right Column: Snippet & Info -->
+        <div class="w-1/3 flex flex-col p-4 bg-slate-900/30 shrink-0">
+            
+            <!-- Snippet Input -->
+            <div class="flex-1 flex flex-col mb-4 min-h-0">
+                <div class="flex items-center justify-between mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    <span>Nieuwe Snippet (Vervanger)</span>
+                </div>
+                <div id="snippetEditorContainer" class="flex-1 bg-slate-950 rounded-lg border border-slate-800 overflow-hidden shadow-inner">
+                    <textarea id="snippetEditor" class="hidden"></textarea>
+                </div>
+            </div>
+
+            <!-- Match Result Info -->
+            <div class="h-56 glass-panel rounded-lg p-5 border border-slate-800 flex flex-col gap-3 overflow-y-auto shrink-0 shadow-xl">
+                <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-400"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                    Match Informatie
+                </h3>
+                
+                <div id="matchDetails" class="text-sm text-slate-400 leading-relaxed">
+                    Plak je broncode links en de nieuwe snippet rechts boven. Klik op "Zoek Match" om de locatie te bepalen.
+                </div>
+
+                <div id="similarityScore" class="mt-auto pt-4 border-t border-slate-800 hidden">
+                    <div class="flex justify-between text-xs font-medium mb-2">
+                        <span class="text-slate-500">Betrouwbaarheid match:</span>
+                        <span id="scoreVal" class="text-blue-400">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div id="scoreBar" class="bg-blue-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <p class="text-[10px] text-slate-500 mt-2 italic">
+                        * Als de snippet langer is, worden er automatisch regels toegevoegd.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Notification system -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-slate-800 border border-slate-700 px-5 py-3 rounded-xl shadow-2xl text-sm transform translate-y-32 transition-transform duration-300 flex items-center gap-3 z-50">
+        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+        <span id="toastMsg">Bestand bijgewerkt!</span>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.23.0/ace.js"></script>
+    <script>
+        let sourceEditor, snippetEditor;
+        let lastMatch = null;
+        let backupSourceContent = null;
+
+        window.onload = () => {
+            // Setup Source Editor
+            sourceEditor = ace.edit("sourceEditorContainer");
+            sourceEditor.setTheme("ace/theme/tomorrow_night_eighties");
+            sourceEditor.session.setMode("ace/mode/javascript");
+            sourceEditor.setOptions({
+                fontSize: "13px",
+                fontFamily: "Fira Code",
+                showPrintMargin: false,
+                useSoftTabs: true,
+                tabSize: 2,
+                wrap: true
+            });
+
+            // Setup Snippet Editor
+            snippetEditor = ace.edit("snippetEditorContainer");
+            snippetEditor.setTheme("ace/theme/tomorrow_night_eighties");
+            snippetEditor.session.setMode("ace/mode/javascript");
+            snippetEditor.setOptions({
+                fontSize: "13px",
+                fontFamily: "Fira Code",
+                showPrintMargin: false,
+                highlightActiveLine: false,
+                showGutter: true,
+                wrap: true
+            });
+
+            // Demo content
+            sourceEditor.setValue(`// Voorbeeld code\nfunction databaseConnect() {\n  console.log("Verbinding maken...");\n  \n  // DIT BLOK GAAN WE VERVANGEN\n  const config = {\n    host: 'localhost',\n    port: 5432\n  };\n  return config;\n}\n\nfunction startServer() {\n  const db = databaseConnect();\n  console.log("Server draait op poort 3000");\n}`, -1);
+
+            snippetEditor.setValue(`const config = {\n  host: 'production.db.example.com',\n  port: 5432,\n  ssl: true,\n  timeout: 5000,\n  user: 'admin',\n  password: process.env.DB_PASSWORD\n};`, -1);
+            
+            updateLineCount();
+            sourceEditor.on("change", updateLineCount);
+        };
+
+        function updateLineCount() {
+            const count = sourceEditor.session.getLength();
+            document.getElementById('lineCount').innerText = `${count} regels`;
+        }
+
+        function calculateSimilarity(s1, s2) {
+            let longer = s1.length >= s2.length ? s1 : s2;
+            let shorter = s1.length < s2.length ? s1 : s2;
+            if (longer.length === 0) return 1.0;
+            return (longer.length - editDistance(longer, shorter)) / parseFloat(longer.length);
+        }
+
+        function editDistance(s1, s2) {
+            let costs = new Array();
+            for (let i = 0; i <= s1.length; i++) {
+                let lastValue = i;
+                for (let j = 0; j <= s2.length; j++) {
+                    if (i == 0) costs[j] = j;
+                    else {
+                        if (j > 0) {
+                            let newValue = costs[j - 1];
+                            if (s1.charAt(i - 1) != s2.charAt(j - 1))
+                                newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+                            costs[j - 1] = lastValue;
+                            lastValue = newValue;
+                        }
+                    }
+                }
+                if (i > 0) costs[s2.length] = lastValue;
+            }
+            return costs[s2.length];
+        }
+
+        function findBestMatch() {
+            const source = sourceEditor.getValue();
+            const snippet = snippetEditor.getValue();
+
+            if (!source.trim() || !snippet.trim()) {
+                showToast("Vul eerst code en een snippet in.");
+                return;
+            }
+
+            const sourceLines = source.split('\n');
+            const snippetLines = snippet.split('\n');
+            const snippetLen = snippetLines.length;
+
+            let bestScore = -1;
+            let bestIndex = -1;
+            let bestMatchLineCount = snippetLen;
+
+            const normalize = (str) => str.replace(/\s+/g, '').toLowerCase();
+            const normalizedSnippet = normalize(snippet);
+
+            // We zoeken met een flexibel venster (snippet lengte +/- 2 regels)
+            for (let i = 0; i <= sourceLines.length - 1; i++) {
+                // Test verschillende venstergroottes om de beste match te vinden,
+                // zelfs als de oude code in de source korter/langer was dan de snippet
+                for (let offset = -2; offset <= 2; offset++) {
+                    let currentLen = snippetLen + offset;
+                    if (currentLen < 1) continue;
+                    
+                    let endIdx = Math.min(i + currentLen, sourceLines.length);
+                    let currentBlock = sourceLines.slice(i, endIdx).join('\n');
+                    let normalizedBlock = normalize(currentBlock);
+
+                    let score = calculateSimilarity(normalizedSnippet, normalizedBlock);
+                    
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestIndex = i;
+                        bestMatchLineCount = endIdx - i;
+                        if (score === 1) break;
+                    }
+                }
+                if (bestScore === 1) break;
+            }
+
+            if (bestIndex !== -1 && bestScore > 0.1) {
+                highlightMatch(bestIndex, bestMatchLineCount, bestScore);
+            } else {
+                showToast("Geen vergelijkbare code gevonden.");
+                document.getElementById('replaceBtn').disabled = true;
+            }
+        }
+
+        function highlightMatch(startIndex, lineCount, score) {
+            const session = sourceEditor.getSession();
+            const markers = session.getMarkers();
+            for (let m in markers) {
+                if (markers[m].type === "background") session.removeMarker(markers[m].id);
+            }
+
+            const Range = ace.require("ace/range").Range;
+            // Selecteer de volledige regels
+            const matchRange = new Range(startIndex, 0, startIndex + lineCount - 1, 1000);
+            
+            session.addMarker(matchRange, "highlight-match", "background");
+            sourceEditor.scrollToLine(startIndex, true, true, () => {});
+
+            lastMatch = { start: startIndex, end: startIndex + lineCount - 1, range: matchRange };
+            
+            const scorePercent = Math.round(score * 100);
+            document.getElementById('matchDetails').innerHTML = `
+                Match gevonden op regel <strong>${startIndex + 1}</strong> tot <strong>${startIndex + lineCount}</strong>.<br><br>
+                Deze sectie wordt vervangen door de nieuwe snippet. De rest van de code schuift automatisch mee.
+            `;
+            
+            document.getElementById('similarityScore').classList.remove('hidden');
+            document.getElementById('scoreVal').innerText = scorePercent + '%';
+            document.getElementById('scoreBar').style.width = scorePercent + '%';
+            
+            document.getElementById('replaceBtn').disabled = false;
+        }
+
+        function replaceSnippet() {
+            if (!lastMatch) return;
+
+            backupSourceContent = sourceEditor.getValue();
+            const snippet = snippetEditor.getValue();
+            const session = sourceEditor.getSession();
+            
+            // In Ace Editor voegt .replace() automatisch regels toe als de snippet langer is
+            // Het 'overschrijdt' nooit de regels onder de selectie.
+            session.replace(lastMatch.range, snippet);
+
+            showToast("Code geplaatst en regels aangepast!");
+            
+            document.getElementById('replaceBtn').disabled = true;
+            document.getElementById('undoBtn').disabled = false;
+            document.getElementById('similarityScore').classList.add('hidden');
+            document.getElementById('matchDetails').innerText = "De code is succesvol bijgewerkt.";
+            
+            // Cleanup markers
+            const markers = session.getMarkers();
+            for (let m in markers) session.removeMarker(markers[m].id);
+            
+            lastMatch = null;
+        }
+
+        function undoReplacement() {
+            if (backupSourceContent === null) return;
+            sourceEditor.setValue(backupSourceContent, -1);
+            backupSourceContent = null;
+            document.getElementById('undoBtn').disabled = true;
+            document.getElementById('matchDetails').innerText = "Hersteld naar de staat van vóór de laatste actie.";
+            showToast("Herstel uitgevoerd.");
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.classList.remove('translate-y-32');
+            setTimeout(() => {
+                toast.classList.add('translate-y-32');
+            }, 3000);
+        }
+
+        document.getElementById('findBtn').addEventListener('click', findBestMatch);
+        document.getElementById('replaceBtn').addEventListener('click', replaceSnippet);
+        document.getElementById('undoBtn').addEventListener('click', undoReplacement);
+    </script>
+</body>
+</html>
